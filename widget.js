@@ -401,12 +401,12 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     main.centerAlignContent();
     main.addSpacer();
     const timeSize = notices.length ? 29 : 36;
-    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : 22, ink, true);
+    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : 22, new Color("FF0033"), true);
     if (/^\d{2}:\d{2}$/.test(view.detail)) {
       main.addSpacer(8);
       addText(main, "—", 22, muted);
       main.addSpacer(8);
-      addText(main, view.detail, timeSize, ink, true);
+      addText(main, view.detail, timeSize, new Color("FF0033"), true);
     }
     main.addSpacer();
     const subtitle = view.following || (/^\d{2}:\d{2}$/.test(view.detail) ? "" : view.detail);
