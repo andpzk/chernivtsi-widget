@@ -4,12 +4,12 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../widget.js'), 'utf8');
 
-async function render(width, state = 'off', group = '12') {
+async function render(width, state = 'off', group = '12', family = 'medium') {
   const images = [], texts = [], drawings = [];
   class Container {
     constructor(){this.children=[];}
     addStack(){const c=new Container();this.children.push(c);return c;}
-    addText(text){const c={text};this.children.push(c);texts.push(c);return c;}
+    addText(text){const c={text,centerAlignText(){}};this.children.push(c);texts.push(c);return c;}
     addSpacer(){}
     addImage(image){const c={image,applyFittingContentMode(){}};images.push(c);return c;}
     layoutVertically(){this.vertical=true;}
@@ -49,7 +49,7 @@ async function render(width, state = 'off', group = '12') {
     LinearGradient:class {},Font:{systemFont:size=>({size}),semiboldSystemFont:size=>({size})},
     DateFormatter:class {useNoDateStyle(){}useShortTimeStyle(){}string(d){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}},
     Device:{isUsingDarkAppearance(){throw Error('Unavailable in widgets');}},SFSymbol:{named:()=>({image:{symbol:true}})},
-    config:{runsInApp:false,runsInWidget:true},args:{widgetParameter:group},Script:{name:()=> 'Чернівці Світло'},
+    config:{runsInApp:false,runsInWidget:true,widgetFamily:family},args:{widgetParameter:group},Script:{name:()=> 'Чернівці Світло'},
     Request:class {async loadString(){throw Error('Offline test');}},
     FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>true,readString:()=>JSON.stringify(cache),writeString(){}})}
   });
@@ -58,6 +58,19 @@ async function render(width, state = 'off', group = '12') {
   assert.ok(host instanceof ListWidget,'Updater must receive the actual ListWidget, not its content stack');
   assert.ok(host.refreshAfterDate instanceof Date);
   assert.match(host.url,/scriptable:\/\/\/run\?/);
+  if(family.startsWith('accessory')) {
+    assert.equal(drawings.length,0,'Lock Screen must not render the full-size glass or timeline');
+    assert.equal(host.backgroundGradient,undefined);
+    assert.ok(texts.some(t=>t.text.includes('12')));
+    if(family==='accessoryInline')assert.equal(texts.length,1);
+    if(family==='accessoryCircular')assert.equal(host.addAccessoryWidgetBackground,true);
+    if(family==='accessoryRectangular') {
+      assert.ok(texts.some(t=>t.text==='Без світла'));
+      assert.ok(texts.some(t=>t.text==='Можливе заживлення з 21:00'));
+      assert.ok(texts.some(t=>t.text==='↻ 19:01 · кеш'));
+    }
+    return;
+  }
   assert.equal(host.padding.join(','),'0,0,0,0');
   const surface=host.children[0],expectedWidth=Number.isFinite(width)&&width>=300&&width<=500?width:378;
   assert.equal(surface.size.width,expectedWidth);
@@ -88,5 +101,6 @@ async function render(width, state = 'off', group = '12') {
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
   for(const state of ['on','possible','unknown'])await render(378,state);
   await render(378,'off','invalid');
+  for(const family of ['accessoryRectangular','accessoryCircular','accessoryInline'])await render(378,'off','12',family);
   console.log('PASS: glass layers, dynamic theme colors, widget-only APIs, sizing, status states, timeline/marker/labels, offline data and invalid group. Native pixels require iPhone verification.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

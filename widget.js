@@ -372,7 +372,56 @@ function glassReflections(width, height) {
   return ctx.getImage();
 }
 
+function makeLockScreenWidget(data, group, now, error, family) {
+  const widget = new ListWidget();
+  const ink = new Color("FFFFFF");
+  widget.refreshAfterDate = new Date(nextRefreshAt(error ? null : data, now));
+  widget.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
+  const p = kyivParts(now);
+  const usable = data && data.date === p.date && !error;
+  const state = usable && !data.emergency ? data.cells[p.slot] : "unknown";
+  const names = {on:"Є світло", off:"Без світла", possible:"Можливе заживлення", unknown:"Немає даних"};
+  const status = error ? (error.includes("групу") ? "Перевірте групу" : "Немає даних") : !usable ? "Немає графіка" : data.emergency ? "Аварійні відключення" : names[state];
+  let detail = error || (!usable ? "Оновіть у Scriptable" : data.emergency ? "Час заживлення невідомий" : "Далі немає даних");
+  let nextTime = "";
+  if (usable && !data.emergency && state !== "unknown") {
+    const next = periods(data.cells).find(range => range.start > p.slot);
+    if (next) {
+      nextTime = clock(next.start);
+      detail = `${{on:"Заживлення з", off:"Відключення о", possible:"Можливе заживлення з", unknown:"Немає даних з"}[next.state]} ${nextTime}`;
+    } else if (state === "on") detail = "За графіком до кінця доби";
+  }
+  const stale = usable && now - data.sourceAt > 7200000;
+  const checked = usable ? `↻ ${kyivParts(data.checkedAt).time}${data.cached ? " · кеш" : stale ? " · давні" : ""}${data.source === "community" ? " · резерв" : ""}` : "";
+  if (family === "accessoryInline") {
+    // Inline accessories accept a single text element; keep all essential meaning in it.
+    addText(widget, `${group} · ${status}${nextTime ? ` · зміна ${nextTime}` : ""}${data && data.cached ? " · кеш" : ""}`, 12, ink);
+    return widget;
+  }
+  widget.setPadding(2, 3, 2, 3);
+  if (family === "accessoryCircular") {
+    widget.addAccessoryWidgetBackground = true;
+    const shortStatus = state === "possible" && usable && !data.emergency ? "Можливо" : status;
+    const line = (text, size, bold = false) => addText(widget, text, size, ink, bold).centerAlignText();
+    widget.addSpacer();
+    line(shortStatus, 9, true);
+    line(nextTime ? "Зміна о" : "Графік", 8);
+    line(nextTime || "—", 14, true);
+    line(`${group}${data && data.cached ? " · кеш" : " група"}`, 8);
+    widget.addSpacer();
+    return widget;
+  }
+  addText(widget, `Чернівці · ${group}`, 10, ink);
+  addText(widget, status, 13, ink, true);
+  addText(widget, detail, 10, ink);
+  if (checked) addText(widget, checked, 9, ink);
+  return widget;
+}
+
 function makeWidget(data, group, now, error = "", settings = {}) {
+  if (["accessoryRectangular", "accessoryInline", "accessoryCircular"].includes(config.widgetFamily)) {
+    return makeLockScreenWidget(data, group, now, error, config.widgetFamily);
+  }
   const host = new ListWidget();
   const widget = host.addStack();
   widget.layoutVertically();
