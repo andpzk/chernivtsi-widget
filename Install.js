@@ -1,7 +1,7 @@
 // Install once in Scriptable. Future widget code comes from andpzk/chernivtsi-widget.
 // Each widget's Parameter (1–12) overrides the group below.
 const LOCAL_SETTINGS = {group: 12, widgetWidth: 378};
-const UPDATE_URL = "https://raw.githubusercontent.com/andpzk/chernivtsi-widget/main/widget.js";
+const REPOSITORY = "andpzk/chernivtsi-widget";
 const CHECK_INTERVAL = 60 * 60 * 1000;
 
 async function loadWidget() {
@@ -49,7 +49,15 @@ async function loadWidget() {
     state.checkedAt = now;
     let candidate = null;
     try {
-      const request = new Request(`${UPDATE_URL}?check=${Math.floor(now / CHECK_INTERVAL)}`);
+      // Resolve main first: GitHub Raw can serve stale branch content even with no-cache.
+      const latest = new Request(`https://api.github.com/repos/${REPOSITORY}/commits?sha=main&per_page=1&check=${UUID.string()}`);
+      latest.timeoutInterval = 5;
+      latest.headers = {"Accept": "application/vnd.github+json", "Cache-Control": "no-cache"};
+      const commits = await latest.loadJSON();
+      if (!latest.response || latest.response.statusCode !== 200) throw Error("Не вдалося перевірити останню версію GitHub");
+      const sha = Array.isArray(commits) && commits[0] && commits[0].sha;
+      if (typeof sha !== "string" || !/^[0-9a-f]{40}$/i.test(sha)) throw Error("GitHub повернув некоректний коміт");
+      const request = new Request(`https://raw.githubusercontent.com/${REPOSITORY}/${sha}/widget.js`);
       request.timeoutInterval = 5;
       request.headers = {"Cache-Control": "no-cache"};
       const code = await request.loadString();

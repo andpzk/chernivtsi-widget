@@ -16,9 +16,10 @@ function release(version, fails = false) {
     return {version:${JSON.stringify(version)},group:args.widgetParameter||settings.group,width:settings.widgetWidth,async presentMedium(){}};
   }};`;
 }
-async function run(files, {remote=release('one'),offline=false,status=200,app=false,now=start,group='12',brokenStateWrite=false}={}) {
+async function run(files, {remote=release('one'),offline=false,status=200,apiStatus=200,sha='a'.repeat(40),app=false,now=start,group='12',brokenStateWrite=false}={}) {
   let widget, finished=false, requests=0, imports=0;
   const missingReads=[];
+  const urls=[];
   class FixedDate extends Date {constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
   const fm = {
     libraryDirectory:()=>'/lib', joinPath:(a,b)=>a+'/'+b, createDirectory(){},
@@ -29,7 +30,14 @@ async function run(files, {remote=release('one'),offline=false,status=200,app=fa
   const sandbox = {Date:FixedDate,Set,console:{log(){}},
     FileManager:{local:()=>fm},
     UUID:{string:()=>`00000000-0000-0000-0000-${String(++serial).padStart(12,'0')}`},
-    Request:class {constructor(url){assert.match(url,/^https:\/\/raw\.githubusercontent\.com\/andpzk\/chernivtsi-widget\/main\/widget\.js\?check=\d+$/);requests++;this.response={statusCode:status};}async loadString(){if(offline)throw Error('Offline');return remote;}},
+    Request:class {
+      constructor(url){urls.push(url);this.api=url.startsWith('https://api.github.com/');this.response={statusCode:this.api?apiStatus:status};
+        if(this.api) assert.match(url,/^https:\/\/api\.github\.com\/repos\/andpzk\/chernivtsi-widget\/commits\?sha=main&per_page=1&check=[0-9a-f-]{36}$/);
+        else {assert.equal(url,`https://raw.githubusercontent.com/andpzk/chernivtsi-widget/${sha}/widget.js`);requests++;}
+      }
+      async loadJSON(){assert.ok(this.api);if(offline)throw Error('Offline');return [{sha}];}
+      async loadString(){assert.ok(!this.api);if(offline)throw Error('Offline');return remote;}
+    },
     ListWidget:class {constructor(){this.texts=[];}setPadding(){}addSpacer(){}addText(t){this.texts.push(t);return {};}async presentMedium(){}},
     Color:class {static dynamic(a,b){return {a,b};}},Font:{systemFont(){},semiboldSystemFont(){}},
     config:{runsInApp:app,runsInWidget:!app},args:{widgetParameter:group},
@@ -40,7 +48,7 @@ async function run(files, {remote=release('one'),offline=false,status=200,app=fa
   await vm.runInContext(`(async()=>{${installer}})()`,context);
   assert.ok(finished);
   assert.deepEqual(missingReads,[], 'Missing files must be checked before reading: Scriptable logs even caught errors');
-  return {widget,requests,imports};
+  return {widget,requests,imports,urls};
 }
 
 (async()=>{
@@ -54,7 +62,16 @@ async function run(files, {remote=release('one'),offline=false,status=200,app=fa
   assert.equal(result.requests,0);assert.equal(result.widget.version,'one');
   result=await run(files,{now:start+120000,app:true,remote:release('two')});
   assert.equal(result.requests,1);assert.equal(result.widget.version,'two');
+  const manualURL=result.urls[0];
+  result=await run(files,{now:start+120000,app:true,remote:release('two'),sha:'b'.repeat(40)});
+  assert.notEqual(result.urls[0],manualURL,'Each manual check must use a fresh API URL');
+  assert.equal(result.urls[1],`https://raw.githubusercontent.com/andpzk/chernivtsi-widget/${'b'.repeat(40)}/widget.js`);
   const second=JSON.parse(files.get(statePath)).current;
+  for(const options of [{apiStatus:403},{apiStatus:429},{sha:'main'},{sha:'../main'}]) {
+    result=await run(files,{...options,app:true,remote:release('bad')});
+    assert.equal(result.widget.version,'two');
+    assert.equal(result.requests,0,'Failed commit lookup must not download an unverified branch URL');
+  }
   assert.equal(JSON.parse(files.get(statePath)).previous,first);
   result=await run(files,{now:start+2*hour,offline:true});
   assert.equal(result.widget.version,'two');
