@@ -14,7 +14,7 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
   const ctx=vm.createContext({Date:FixedDate,Intl,module:{exports:{}},console:{log(){}},
     Request:class{constructor(url){this.url=url;requests.push(url);this.response={statusCode:200};}async loadString(){const body=this.url.endsWith('?next')?tomorrow:this.url.includes('raw.githubusercontent')?null:today;if(body===null)throw Error('Offline');return body;}},
     FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>!!cache,readString:()=>JSON.stringify(cache),writeString:(p,s)=>writes.push(JSON.parse(s))})},
-    ListWidget:Container,Color:class{},Font:{systemFont(){},semiboldSystemFont(){}},Script:{name:()=> 'Світло'},
+    SFSymbol:{named:name=>({image:{symbol:name}})},ListWidget:Container,Color:class{},Font:{systemFont(){},semiboldSystemFont(){}},Script:{name:()=> 'Світло'},
     Size:class{constructor(width,height){Object.assign(this,{width,height});}},Rect:class{},
     DrawContext:class{setFillColor(){}fillRect(){}fillEllipse(){}getImage(){return {}; }},
     DateFormatter:class{useNoDateStyle(){}useShortTimeStyle(){}string(d){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}}
@@ -80,11 +80,15 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
   const at=ctx.kyivTimestamp('2026-11-07','23:40');
   for(const family of ['accessoryRectangular','accessoryInline','accessoryCircular']){
     sample.texts.length=0;ctx.makeLockScreenWidget(futureData,12,at,'',family);
-    if(family==='accessoryRectangular'){assert.ok(sample.texts.includes('До планового заживлення'));assert.equal(sample.texts.slice(1,5).join(''),'1 год50 хв');assert.ok(!sample.texts.some(t=>/завтра|[+−]1|група/.test(t)));}
+    if(family==='accessoryRectangular'){assert.equal(sample.texts.slice(0,3).join(''),'01:30 – 05:00');assert.ok(!sample.texts.some(t=>/завтра|[+−]1|група/.test(t)));}
     else if(family==='accessoryCircular'){assert.ok(sample.texts.includes('Завтра о'));assert.ok(sample.texts.includes('01:00'));}
     else assert.ok(sample.texts.some(t=>t.includes('01:00 завтра')));
   }
   assert.equal(ctx.lockScreenTarget(futureData,at).at,Date.parse('2026-11-07T23:30:00Z'));
+  assert.equal(ctx.lockScreenTarget(futureData,at).endAt,Date.parse('2026-11-08T03:00:00Z'));
+  const beforeMidnight={...futureData,cells:Array(48).fill('on')};beforeMidnight.cells.fill('off',46);
+  const night=ctx.lockScreenTarget(beforeMidnight,ctx.kyivTimestamp('2026-11-07','22:30'));
+  assert.equal(night.time,'23:00');assert.equal(night.endTime,'01:00');
   const unknown=nextCells.slice();unknown[0]='unknown';
   assert.equal(ctx.lockScreenSchedule(cells,'23:40',unknown).next.state,'unknown','Do not skip uncertainty to predict restoration');
   assert.equal(ctx.lockScreenTarget({...futureData,tomorrow:{...futureData.tomorrow,cells:unknown}},at),null);
@@ -92,17 +96,19 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
     const at=ctx.kyivTimestamp(date,'23:00'),future=Array(48).fill('on');future.fill('off',0,8);
     const day={date,cells:Array(48).fill('off'),group:12,source:'official',sourceAt:at,checkedAt:at,emergency:false};
     day.tomorrow={...day,date:ctx.shiftDate(date,1),cells:future};sample.texts.length=0;
-    ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');assert.ok(sample.texts.slice(1,3).join('')===duration,'Overnight countdown must use elapsed Kyiv time across DST');
+    ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');assert.equal(sample.texts.slice(0,3).join(''),'04:00 – —');assert.equal((ctx.lockScreenTarget(day,at).at-at)/3600000,Number(duration[0]),'Target must retain elapsed Kyiv time across DST');
   }
-  for (const [instant, end, duration] of [
-    ['2026-10-25T00:15:00Z',7,'15 хв'],
-    ['2026-10-25T01:15:00Z',7,'15 хв'],
-    ['2026-03-29T00:45:00Z',7,'15 хв']
+  for (const [instant, end] of [
+    ['2026-10-25T00:15:00Z',7],
+    ['2026-10-25T01:15:00Z',7],
+    ['2026-03-29T00:45:00Z',7]
   ]) {
     const at=Date.parse(instant),day={date:ctx.kyivParts(at).date,cells:Array(48).fill('on'),source:'official',sourceAt:at,checkedAt:at};
     day.cells.fill('off',0,end);sample.texts.length=0;
     ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');
-    assert.equal(sample.texts.slice(1,3).join(''),duration,`Actual restoration during DST: ${instant}`);
+    assert.equal(ctx.lockScreenTarget(day,at).at-at,15*60000,`Actual restoration during DST: ${instant}`);
+    assert.ok(sample.texts[0]=== (instant.includes('03-29')?'04:00':'03:30'));
+    if(instant==='2026-10-25T00:15:00Z')assert.equal(ctx.lockScreenTarget(day,at).endAt,Date.parse('2026-10-25T01:00:00Z'),'Interval ends when rollback returns to an off slot');
   }
   const springAt=Date.parse('2026-03-29T00:45:00Z');
   const spring={date:'2026-03-29',cells:Array(48).fill('off'),source:'official',sourceAt:springAt,checkedAt:springAt};

@@ -66,15 +66,15 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     if(family==='accessoryInline')assert.equal(texts.length,1);
     if(family==='accessoryCircular')assert.equal(host.addAccessoryWidgetBackground,true);
     if(family==='accessoryRectangular') {
-      assert.ok(texts.some(t=>t.text==='До планового заживлення'));
-      assert.equal(texts.slice(1,5).map(t=>t.text).join(''),'2 год29 хв');
+      assert.equal(texts.slice(0,3).map(t=>t.text).join(''),'21:30 – —');
+      assert.ok(texts.some(t=>t.text.includes('кінець невідомий')));
       assert.ok(!texts.some(t=>/↻|група|12 ·|Можливе заживлення/.test(t.text)));
-      assert.ok(texts.some(t=>t.text==='кеш'));
+      assert.ok(texts.some(t=>t.text.includes('кеш')));
       assert.deepEqual({...drawings[0].size},{width:150,height:14});
       assert.equal(drawings[0].respectScreenScale,true);
       assert.equal(drawings[0].opaque,false);
       assert.equal(images[0].tintColor.hex,'FFFFFF');
-      assert.deepEqual({...images[0].imageSize},{width:150,height:14});
+      assert.deepEqual({...images.at(-1).imageSize},{width:150,height:14});
       for(const op of drawings[0].ops) {
         assert.equal(op.color.hex,'FFFFFF','Monochrome strip must not bake in Home Screen colors');
         if(op.rect)assert.ok(Object.values(op.rect).every(Number.isFinite));

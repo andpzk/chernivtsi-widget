@@ -1,9 +1,9 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../widget.js'),'utf8');
-function render({time='19:01',hour12=false,kind='normal',family='accessoryRectangular',cached=false,sourceName='official',error=''}={}) {
-  const texts=[],images=[],drawings=[];
+function render({time='19:01',hour12=false,kind='normal',family='accessoryRectangular',cached=false,sourceName='official',error='',missingSymbol=false}={}) {
+  const texts=[],images=[],drawings=[],textNodes=[];
   class Widget {
-    addText(text){texts.push(text);return {centerAlignText(){}};}
+    addText(text){texts.push(text);const node={text,centerAlignText(){}};textNodes.push(node);return node;}
     addSpacer(){}
     setPadding(){}
     addStack(){return new Widget();}
@@ -22,7 +22,8 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
     Color:class{constructor(hex,alpha=1){Object.assign(this,{hex,alpha});}},
     Size:class{constructor(width,height){Object.assign(this,{width,height});}},
     Rect:class{constructor(x,y,width,height){Object.assign(this,{x,y,width,height});}},
-    Font:{systemFont(){},semiboldSystemFont(){}},Script:{name:()=> 'Світло'},
+    SFSymbol:{named:name=>missingSymbol?null:{image:{symbol:name}}},
+    Font:{systemFont:size=>({size}),semiboldSystemFont:size=>({size})},Script:{name:()=> 'Світло'},
     DateFormatter:class{useNoDateStyle(){}useShortTimeStyle(){}string(date){return new Intl.DateTimeFormat('en-US',{hour:hour12?'numeric':'2-digit',minute:'2-digit',hourCycle:hour12?'h12':'h23'}).format(date);}}
   });
   vm.runInContext(source,ctx);
@@ -32,50 +33,64 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   if(kind==='unknown')cells.fill('unknown');
   if(kind==='gap')cells.fill('unknown',42,43);
   if(kind==='late')cells.fill('off',44);
+  if(kind==='bounded')cells.fill('off',44);
+  if(kind==='endgap')cells.fill('unknown',44);
+  if(kind==='noon'){cells.fill('on');cells.fill('off',24,28);}
   if(kind==='yesterday')data.date='2026-11-06';
   if(kind==='stale')data.sourceAt=now-3*3600000;
   const widget=ctx.makeLockScreenWidget(kind==='empty'?null:data,12,now,error,family);
   assert.ok(widget.refreshAfterDate.getTime()>now);
   assert.match(widget.url,/group=12$/);
-  return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,data,images,drawings};
+  return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,data,images,drawings,textNodes};
 }
 for(const hour12 of [false,true]){
-  const off=render({hour12});
-  assert.ok(off.texts.includes('До планового заживлення'));
-  assert.equal(off.texts.slice(1,5).join(''), '2 год29 хв');
-  assert.ok(!off.texts.some(t=>/Без світла|Можливе|↻|група|12 ·/.test(t)));
-  const possible=render({time:'21:01',hour12});
-  assert.ok(possible.texts.includes('До планового заживлення'));
-  assert.equal(possible.texts.slice(1,3).join(''), '29 хв');
+  const off=render({hour12,kind:'bounded'});
+  assert.equal(off.texts.slice(0,hour12?5:3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
+  assert.equal(off.images[0].image.symbol,'bolt');
+  assert.ok(!off.texts.some(t=>/Без світла|Можливе|↻|група|год|хв|планового/.test(t)));
+  const digits=off.textNodes.filter(t=>t.text.includes(':'));
+  assert.equal(digits.length,2);assert.equal(digits[0].font.size,digits[1].font.size);
+  const possible=render({time:'21:01',hour12,kind:'bounded'});
+  assert.equal(possible.texts.slice(0,hour12?5:3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
   const on=render({time:'18:59',hour12});
-  assert.ok(on.texts.includes('Наступне відключення'));
-  assert.ok(on.texts.includes(hour12?'7:00 PM':'19:00'));
+  assert.equal(on.texts.slice(0,hour12?5:3).join(''),hour12?'7:00 PM – 9:00 PM':'19:00 – 21:00');
+  assert.equal(on.images[0].image.symbol,'bolt.slash');
   assert.equal(on.refresh-on.now,60000);
 }
-assert.ok(render({cached:true}).texts.includes('кеш'));
-assert.ok(render({sourceName:'community'}).texts.includes('резерв'));
-assert.ok(render({kind:'stale'}).texts.includes('давні'));
-const fallback=render({cached:true,sourceName:'community'});
+for(const kind of ['normal','endgap']) {
+  const partial=render({kind});
+  assert.equal(partial.texts.slice(0,3).join(''),'21:30 – —');
+  assert.ok(partial.texts.some(t=>t.includes('кінець невідомий')));
+}
+const noSymbol=render({kind:'bounded',missingSymbol:true});
+assert.ok(noSymbol.texts.some(t=>t.includes('Заживлення')),'Missing symbol keeps event meaning readable');
+assert.ok(noSymbol.texts.includes('21:30')&&noSymbol.texts.includes('22:00'));
+const noon=render({time:'11:59',kind:'noon',hour12:true});
+assert.equal(noon.texts.slice(0,5).join(''),'12:00 PM – 2:00 PM','Already-localized noon must not gain a second PM');
+assert.ok(render({cached:true,kind:'bounded'}).texts.includes('кеш'));
+assert.ok(render({sourceName:'community',kind:'bounded'}).texts.includes('резерв'));
+assert.ok(render({kind:'stale'}).texts.some(t=>t.includes('давні')));
+const fallback=render({cached:true,sourceName:'community',kind:'bounded'});
 assert.ok(fallback.texts.includes('кеш · резерв'));
 assert.ok(!fallback.texts.some(t=>t.startsWith('↻')));
-assert.equal(fallback.texts.slice(1,5).join(''), '2 год29 хв');
+assert.equal(fallback.texts.slice(0,3).join(''),'21:30 – 22:00');
 assert.ok(!fallback.texts.some(t=>t.startsWith('ще ')));
 for(const kind of ['empty','yesterday','unknown','emergency']){
   const result=render({kind});
-  assert.ok(!result.texts.some(t=>t==='До планового заживлення'||t==='Наступне відключення'),'Missing/emergency data must not predict a power transition');
-  assert.equal(result.images.length,kind==='unknown'?1:0);
+  assert.ok(!result.texts.some(t=>/^\d{1,2}:\d{2}/.test(t)),'Missing/emergency data must not predict event clocks');
+  assert.equal(result.images.length,kind==='unknown'?2:0);
 }
 assert.ok(render({kind:'emergency'}).texts.includes('Аварійні відключення'));
 assert.ok(render({time:'23:59'}).texts.includes('Час невідомий'));
 const late=render({time:'23:59',kind:'late'});
-assert.ok(late.texts.includes('—'));
+assert.ok(late.texts.includes('Час невідомий'));
 assert.ok(late.texts.includes('01')&&late.texts.includes('04'));
 assert.ok(late.drawings[0].ops.some(op=>op.color.alpha===0.35));
 assert.equal(late.refresh-late.now,60000);
 const hour=render({time:'17:59'});
 assert.equal(hour.refresh-hour.now,60000,'Request the next hour even without a state change');
 assert.ok(render({kind:'gap'}).texts.includes('Час невідомий'));
-assert.ok(render({time:'21:00',kind:'gap'}).texts.includes('—'));
+assert.ok(render({time:'21:00',kind:'gap'}).texts.includes('Час невідомий'));
 assert.equal(render({family:'accessoryInline'}).texts.length,1);
 assert.ok(render({family:'accessoryCircular'}).texts.includes('21:00'));
 assert.ok(render({error:'Вкажіть групу від 1 до 12'}).texts.includes('Перевірте групу'));
