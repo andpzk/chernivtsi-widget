@@ -621,7 +621,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const green = themeColor("487E64", "72C69B");
   const gradient = new LinearGradient();
   gradient.colors = GLASS_STYLE
-    ? [themeColor("F5F8FC", "35464E"), themeColor("E8EEF5", "1E2836"), themeColor("E1E8F1", "171F2D"), themeColor("DCE4EE", "35445B")]
+    ? [themeColor("F5F8FC", "202F38"), themeColor("E8EEF5", "111925"), themeColor("E1E8F1", "0B121C"), themeColor("DCE4EE", "202D40")]
     : [themeColor("FFFFFF", "202020"), themeColor("F6F6F6", "161616"), themeColor("F0F0F0", "0B0B0B")];
   gradient.locations = GLASS_STYLE ? [0, 0.3, 0.65, 1] : [0, 0.5, 1];
   gradient.startPoint = new Point(GLASS_STYLE ? 0 : 0.5, 0);
