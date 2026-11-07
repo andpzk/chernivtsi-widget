@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../widget.js'), 'utf8');
 
-async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false) {
+async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false) {
   const images = [], texts = [], drawings = [];
   class Container {
     constructor(){this.children=[];}
@@ -49,7 +49,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     Rect:class {constructor(x,y,width,height){Object.assign(this,{x,y,width,height});}},
     LinearGradient:class {},Font:{systemFont:size=>({size}),semiboldSystemFont:size=>({size})},
     DateFormatter:class {useNoDateStyle(){}useShortTimeStyle(){}string(d){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}},
-    Device:{isUsingDarkAppearance(){throw Error('Unavailable in widgets');}},SFSymbol:{named:()=>({image:{symbol:true}})},
+    Device:{isUsingDarkAppearance(){throw Error('Unavailable in widgets');}},SFSymbol:{named:name=>missingSymbol?null:({image:{symbol:name}})},
     config:{runsInApp:false,runsInWidget:true,widgetFamily:family},args:{widgetParameter:group},Script:{name:()=> 'Чернівці Світло'},
     Request:class {async loadString(){throw Error('Offline test');}},
     FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>true,readString:()=>JSON.stringify(cache),writeString(){}})}
@@ -97,6 +97,17 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     for(const op of drawing.ops) if(op.rect)assert.ok(Object.values(op.rect).every(Number.isFinite));
   }
   if(group==='12') {
+    const currentState=tomorrow?'on':state;
+    const expectedSymbol={on:'bolt.fill',off:'bolt.slash.fill',possible:'bolt.fill',unknown:'questionmark.circle'}[currentState];
+    const statusIcon=images.find(image=>image.image.symbol===expectedSymbol);
+    if(missingSymbol) assert.equal(statusIcon,undefined);
+    else {
+      assert.ok(statusIcon,'Show a distinct status icon alongside the label');
+      assert.deepEqual({...statusIcon.imageSize},{width:12,height:14});
+      assert.equal(statusIcon.tintColor.dark.hex,{on:'72C69B',off:'DC8587',possible:'CFB879',unknown:'CFB879'}[currentState]);
+      if(currentState==='possible')assert.ok(texts.some(t=>t.text==='?'&&t.font.size===9));
+    }
+    assert.ok(texts.some(t=>t.text==={on:'Є світло',off:'Без світла',possible:'Можливо світло',unknown:'Немає даних'}[currentState]),'Keep the readable status when icons are unavailable');
     const marker=images.find(image=>image.tintColor?.light?.hex==='000000');
     assert.ok(marker);assert.equal(marker.tintColor.dark.hex,'F6F7FB');
     assert.equal(marker.imageSize.width,expectedWidth-32);
@@ -112,6 +123,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
 (async()=>{
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
   for(const state of ['on','possible','unknown'])await render(378,state);
+  for(const state of ['on','off','possible','unknown'])await render(378,state,'12','medium',false,true);
   await render(378,'off','invalid');
   await render(378,'off','12','medium',true);
   for(const family of ['accessoryRectangular','accessoryCircular','accessoryInline'])await render(378,'off','12',family);

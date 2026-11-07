@@ -647,9 +647,16 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     const badge = header.addStack();
     badge.centerAlignContent();
     badge.spacing = 5;
-    const dot = badge.addImage(SFSymbol.named("circle.fill").image);
-    dot.imageSize = new Size(6, 6);
-    dot.tintColor = color;
+    const symbol = SFSymbol.named({on:"bolt.fill", off:"bolt.slash.fill", possible:"bolt.fill", unknown:"questionmark.circle"}[view.state]);
+    if (symbol) {
+      const iconRow = badge.addStack();
+      iconRow.centerAlignContent();
+      iconRow.spacing = 1;
+      const icon = iconRow.addImage(symbol.image);
+      icon.imageSize = new Size(12, 14);
+      icon.tintColor = color;
+      if (view.state === "possible") addText(iconRow, "?", 9, color, true);
+    }
     addText(badge, names[view.state], 14, color, true);
   } else addText(header, p.date.slice(8) + "." + p.date.slice(5, 7), 11, muted);
   const metadata = widget.addStack();
