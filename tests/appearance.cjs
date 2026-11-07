@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../widget.js'), 'utf8');
 
-async function render(width, state = 'off', group = '12', family = 'medium') {
+async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false) {
   const images = [], texts = [], drawings = [];
   class Container {
     constructor(){this.children=[];}
@@ -39,9 +39,10 @@ async function render(width, state = 'off', group = '12', family = 'medium') {
     getImage(){return {size:this.size,ops:this.ops,opaque:this.opaque};}
   }
   class Color {constructor(hex,alpha=1){Object.assign(this,{hex,alpha});}static dynamic(light,dark){return {light,dark};}}
-  class FixedDate extends Date {static now(){return Date.parse('2026-11-07T17:01:00Z');}}
+  class FixedDate extends Date {static now(){return Date.parse(tomorrow?'2026-11-07T21:40:00Z':'2026-11-07T17:01:00Z');}}
   const cache={date:'2026-11-07',group:12,source:'official',emergency:false,checkedAt:FixedDate.now(),sourceAt:FixedDate.now(),cells:Array(48).fill('on')};
   cache.cells.fill(state,38,42);cache.cells.fill('possible',42,43);
+  if(tomorrow){cache.tomorrow={...cache,date:'2026-11-08',cells:Array(48).fill('on')};cache.tomorrow.cells.fill('off',0,2);cache.tomorrow.cells.fill('possible',2,3);}
   const ctx=vm.createContext({console:{log(){}},Intl,Date:FixedDate,module:{exports:{}},ListWidget,DrawContext,Path:Shape,Color,
     Size:class {constructor(width,height){Object.assign(this,{width,height});}},
     Point:class {constructor(x,y){Object.assign(this,{x,y});}},
@@ -102,7 +103,8 @@ async function render(width, state = 'off', group = '12', family = 'medium') {
     assert.equal(marker.imageSize.width,expectedWidth-32);
     const labels=texts.filter(t=>t.font?.size===12).map(t=>t.text);
     assert.deepEqual(labels,['00','03','06','09','12','15','18','21','24']);
-    if(state==='off')assert.ok(texts.some(t=>t.text==='Відключення триває'));
+    if(state==='off'&&!tomorrow)assert.ok(texts.some(t=>t.text==='Відключення триває'));
+    if(tomorrow){assert.ok(texts.some(t=>t.text==='Наступне відключення · завтра'));assert.ok(texts.some(t=>t.text==='00:00'));assert.ok(texts.some(t=>t.text==='01:00'));assert.ok(texts.some(t=>t.text.includes('завтра · можливе заживлення')));}
     const colors=drawings.flatMap(d=>d.ops.map(op=>op.color?.hex));
     assert.ok(colors.includes('72C69B')&&colors.includes('CFB879'));
     if(state==='off')assert.ok(colors.includes('DC8587'));
@@ -112,6 +114,7 @@ async function render(width, state = 'off', group = '12', family = 'medium') {
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
   for(const state of ['on','possible','unknown'])await render(378,state);
   await render(378,'off','invalid');
+  await render(378,'off','12','medium',true);
   for(const family of ['accessoryRectangular','accessoryCircular','accessoryInline'])await render(378,'off','12',family);
   console.log('PASS: glass layers, dynamic theme colors, widget-only APIs, sizing, status states, timeline/marker/labels, offline data and invalid group. Native pixels require iPhone verification.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
