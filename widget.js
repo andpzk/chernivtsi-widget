@@ -532,7 +532,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   if (target && !target.endTime) notices.push("кінець невідомий");
   event.size = new Size(width, notices.length ? 22 : 26);
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
-  content.addSpacer(notices.length ? 2 : 4);
+  content.addSpacer(notices.length ? 5 : 7);
   const strip = content.addImage(lockScreenStrip(model, width));
   strip.imageSize = new Size(width,14);
   strip.tintColor = ink;
@@ -588,8 +588,8 @@ function makeLockScreenWidget(data, group, now, error, family) {
     return widget;
   }
   if (usable && !data.emergency) {
-    // Lift the ruler toward adjacent circular-widget labels; keep room for quality warnings.
-    widget.setPadding(2, 3, 10, 3);
+    // Move 3pt from bottom padding to the pre-strip gap, preserving the time row's position.
+    widget.setPadding(2, 3, 7, 3);
     // The six-hour window advances on the hour even when the scheduled state is unchanged.
     widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), (Math.floor(now / 3600000) + 1) * 3600000));
     addLockScreenSchedule(widget, data, p, checked, ink, now);
