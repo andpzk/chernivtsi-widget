@@ -1,0 +1,11 @@
+name: Check widget
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --check widget.js
+      - run: node tests/updater.cjs
