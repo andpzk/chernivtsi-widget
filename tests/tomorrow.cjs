@@ -80,17 +80,19 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
   const at=ctx.kyivTimestamp('2026-11-07','23:40');
   for(const family of ['accessoryRectangular','accessoryInline','accessoryCircular']){
     sample.texts.length=0;ctx.makeLockScreenWidget(futureData,12,at,'',family);
-    if(family==='accessoryRectangular'){assert.ok(sample.texts.includes('01:00'));assert.ok(sample.texts.includes('Можливе заживлення · завтра'));assert.ok(sample.texts.includes('ще 1 год 20 хв'));}
+    if(family==='accessoryRectangular'){assert.ok(sample.texts.includes('До планового заживлення'));assert.equal(sample.texts.slice(1,5).join(''),'1 год50 хв');assert.ok(!sample.texts.some(t=>/завтра|[+−]1|група/.test(t)));}
     else if(family==='accessoryCircular'){assert.ok(sample.texts.includes('Завтра о'));assert.ok(sample.texts.includes('01:00'));}
     else assert.ok(sample.texts.some(t=>t.includes('01:00 завтра')));
   }
+  assert.equal(model.target.start,1530);
   const unknown=nextCells.slice();unknown[0]='unknown';
   assert.equal(ctx.lockScreenSchedule(cells,'23:40',unknown).next.state,'unknown','Do not skip uncertainty to predict restoration');
-  for(const [date,duration] of [['2026-03-28','ще 4 год'],['2026-10-24','ще 6 год']]) {
+  assert.equal(ctx.lockScreenSchedule(cells,'23:40',unknown).target,null);
+  for(const [date,duration] of [['2026-03-28','4 год'],['2026-10-24','6 год']]) {
     const at=ctx.kyivTimestamp(date,'23:00'),future=Array(48).fill('on');future.fill('off',0,8);
     const day={date,cells:Array(48).fill('off'),group:12,source:'official',sourceAt:at,checkedAt:at,emergency:false};
     day.tomorrow={...day,date:ctx.shiftDate(date,1),cells:future};sample.texts.length=0;
-    ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');assert.ok(sample.texts.includes(duration),'Overnight countdown must use elapsed Kyiv time across DST');
+    ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');assert.ok(sample.texts.slice(1,3).join('')===duration,'Overnight countdown must use elapsed Kyiv time across DST');
   }
   assert.ok(!ctx.validCache({...data,date:'2026-02-30'},12,captured));
   console.log('PASS: official today/tomorrow fixtures for all groups, publication dates, invalid/withdrawn future data, cache migration/rollover, overnight event ranges and every Lock Screen family.');

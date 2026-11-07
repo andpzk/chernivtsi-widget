@@ -62,14 +62,13 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   if(family.startsWith('accessory')) {
     assert.equal(drawings.length,family==='accessoryRectangular'?1:0,'Only the rectangular accessory draws a compact strip');
     assert.equal(host.backgroundGradient,undefined);
-    assert.ok(texts.some(t=>t.text.includes('12')));
+    if(family!=='accessoryRectangular')assert.ok(texts.some(t=>t.text.includes('12')));
     if(family==='accessoryInline')assert.equal(texts.length,1);
     if(family==='accessoryCircular')assert.equal(host.addAccessoryWidgetBackground,true);
     if(family==='accessoryRectangular') {
-      assert.ok(texts.some(t=>t.text==='12 · Без світла'));
-      assert.ok(texts.some(t=>t.text==='Можливе заживлення'));
-      assert.ok(texts.some(t=>t.text==='21:00'));
-      assert.ok(texts.some(t=>t.text==='↻ 19:01'));
+      assert.ok(texts.some(t=>t.text==='До планового заживлення'));
+      assert.equal(texts.slice(1,5).map(t=>t.text).join(''),'2 год29 хв');
+      assert.ok(!texts.some(t=>/↻|група|12 ·|Можливе заживлення/.test(t.text)));
       assert.ok(texts.some(t=>t.text==='кеш'));
       assert.deepEqual({...drawings[0].size},{width:150,height:14});
       assert.equal(drawings[0].respectScreenScale,true);

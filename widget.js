@@ -427,16 +427,25 @@ function lockScreenSchedule(cells, time, tomorrow = null) {
   const ranges = periods(tomorrow ? cells.concat(tomorrow) : cells).map(p => ({...p, start:p.start * 30, end:p.end * 30}));
   const current = ranges.find(p => p.start <= now && p.end > now);
   const next = current && current.state !== "unknown" ? ranges.find(p => p.start === current.end) : null;
+  let target = null;
+  if (current && current.state !== "unknown") {
+    const wanted = current.state === "on" ? "off" : "on";
+    for (const period of ranges) {
+      if (period.start < current.end) continue;
+      if (period.state === "unknown") break;
+      if (period.state === wanted) { target = period; break; }
+    }
+  }
   const coverage = [{start:-60,end:0,state:"unknown"}, ...ranges, {start:tomorrow ? 2880 : 1440,end:3240,state:"unknown"}];
   const segments = coverage.filter(p => p.end > start && p.start < end)
     .map(p => ({state:p.state, start:Math.max(start,p.start), end:Math.min(end,p.end)}));
-  return {now, start, end, current, next, segments, marker:(now - start) / 360};
+  return {now, start, end, current, next, target, segments, marker:(now - start) / 360};
 }
 
 function lockScreenAxis(minute) {
   const hour = (Math.floor(minute / 60) + 24) % 24;
   const label = displayTimes(`${String(hour).padStart(2,"0")}:00`).match(/\p{Number}+/u)?.[0] || String(hour);
-  return label + (minute < 0 ? " −1" : minute >= 1440 ? " +1" : "");
+  return label;
 }
 
 function lockScreenStrip(model, width) {
@@ -465,8 +474,8 @@ function lockScreenStrip(model, width) {
   return ctx.getImage();
 }
 
-function addLockScreenSchedule(widget, data, group, p, checked, ink, now) {
-  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data)), next = model.next;
+function addLockScreenSchedule(widget, data, p, checked, ink, now) {
+  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data)), target = model.target;
   const frame = widget.addStack();
   frame.addSpacer();
   const content = frame.addStack();
@@ -475,28 +484,26 @@ function addLockScreenSchedule(widget, data, group, p, checked, ink, now) {
   const width = 150;
   content.size = new Size(width, 0);
   frame.addSpacer();
-  const header = content.addStack();
-  const status = {on:"Є світло",off:"Без світла",possible:"Можливе світло",unknown:"Немає даних"}[model.current.state];
-  addText(header, `${group} · ${status}`, 8.5, ink);
-  header.addSpacer();
-  const [checkedTime, ...notices] = checked.split(" · ");
-  addText(header, checkedTime, 7.5, ink);
+  const isOn = model.current.state === "on";
+  addText(content, target ? isOn ? "Наступне відключення" : "До планового заживлення" : "Час невідомий", 10, ink);
   const event = content.addStack();
   event.centerAlignContent();
-  addText(event, next ? clock(next.start / 30 % 48) : "—", 20, ink, true);
-  event.addSpacer();
-  // Data-quality notices take the countdown's space; never hide them to fit the accessory.
-  if (notices.length) addText(event, notices.join(" · "), 7.5, ink);
-  else if (next) {
-    const left = next.start >= 1440
-      ? Math.ceil((kyivTimestamp(shiftDate(data.date,1),clock(next.start / 30 % 48)) - now) / 60000)
-      : next.start - model.now;
-    const duration = left >= 60 ? `${Math.floor(left / 60)} год${left % 60 ? ` ${left % 60} хв` : ""}` : `${left} хв`;
-    addText(event, `ще ${duration}`, 8, ink);
+  if (!target || isOn) addText(event, target ? clock(target.start / 30 % 48) : "—", 24, ink, true);
+  else {
+    const date = shiftDate(data.date, Math.floor(target.start / 1440));
+    const left = Math.max(0, Math.ceil((kyivTimestamp(date,clock(target.start / 30 % 48)) - now) / 60000));
+    if (left >= 60) {
+      addText(event, String(Math.floor(left / 60)), 24, ink, true);
+      addText(event, " год", 12, ink);
+    }
+    if (left % 60 || left < 60) {
+      if (left >= 60) event.addSpacer(4);
+      addText(event, String(left % 60), 24, ink, true);
+      addText(event, " хв", 12, ink);
+    }
   }
-  let label = next ? {on:"Планове заживлення",off:"Відключення",possible:"Можливе заживлення",unknown:"Немає даних з"}[next.state] : "Далі графіка немає";
-  if (next && next.start >= 1440) label += " · завтра";
-  addText(content, label, 10, ink);
+  const notices = checked.split(" · ").slice(1);
+  if (notices.length) addText(content, notices.join(" · "), 8, ink);
   content.addSpacer(1);
   const strip = content.addImage(lockScreenStrip(model, width));
   strip.imageSize = new Size(width,14);
@@ -555,10 +562,10 @@ function makeLockScreenWidget(data, group, now, error, family) {
   if (usable && !data.emergency) {
     // The six-hour window advances on the hour even when the scheduled state is unchanged.
     widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), (Math.floor(now / 3600000) + 1) * 3600000));
-    addLockScreenSchedule(widget, data, group, p, checked, ink, now);
+    addLockScreenSchedule(widget, data, p, checked, ink, now);
     return widget;
   }
-  addText(widget, `Чернівці · ${group}`, 10, ink);
+  addText(widget, "Чернівці", 10, ink);
   addText(widget, status, 13, ink, true);
   addText(widget, detail, 10, ink);
   if (checked) addText(widget, checked, 9, ink);

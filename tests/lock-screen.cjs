@@ -41,17 +41,14 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
 }
 for(const hour12 of [false,true]){
   const off=render({hour12});
-  assert.ok(off.texts.includes('12 · Без світла'));
-  assert.ok(off.texts.includes('Можливе заживлення'));
-  assert.ok(off.texts.includes(hour12?'9:00 PM':'21:00'));
-  assert.ok(off.texts.includes('ще 1 год 59 хв'));
+  assert.ok(off.texts.includes('До планового заживлення'));
+  assert.equal(off.texts.slice(1,5).join(''), '2 год29 хв');
+  assert.ok(!off.texts.some(t=>/Без світла|Можливе|↻|група|12 ·/.test(t)));
   const possible=render({time:'21:01',hour12});
-  assert.ok(possible.texts.includes('12 · Можливе світло'));
-  assert.ok(possible.texts.includes('Планове заживлення'));
-  assert.ok(possible.texts.includes(hour12?'9:30 PM':'21:30'));
-  assert.ok(possible.texts.includes('ще 29 хв'));
+  assert.ok(possible.texts.includes('До планового заживлення'));
+  assert.equal(possible.texts.slice(1,3).join(''), '29 хв');
   const on=render({time:'18:59',hour12});
-  assert.ok(on.texts.includes('Відключення'));
+  assert.ok(on.texts.includes('Наступне відключення'));
   assert.ok(on.texts.includes(hour12?'7:00 PM':'19:00'));
   assert.equal(on.refresh-on.now,60000);
 }
@@ -60,23 +57,24 @@ assert.ok(render({sourceName:'community'}).texts.includes('резерв'));
 assert.ok(render({kind:'stale'}).texts.includes('давні'));
 const fallback=render({cached:true,sourceName:'community'});
 assert.ok(fallback.texts.includes('кеш · резерв'));
-assert.ok(fallback.texts.includes('↻ 19:00'));
+assert.ok(!fallback.texts.some(t=>t.startsWith('↻')));
+assert.equal(fallback.texts.slice(1,5).join(''), '2 год29 хв');
 assert.ok(!fallback.texts.some(t=>t.startsWith('ще ')));
 for(const kind of ['empty','yesterday','unknown','emergency']){
   const result=render({kind});
-  assert.ok(!result.texts.some(t=>t==='21:00'||t.startsWith('ще ')),'Missing/emergency data must not predict a power transition');
+  assert.ok(!result.texts.some(t=>t==='До планового заживлення'||t==='Наступне відключення'),'Missing/emergency data must not predict a power transition');
   assert.equal(result.images.length,kind==='unknown'?1:0);
 }
 assert.ok(render({kind:'emergency'}).texts.includes('Аварійні відключення'));
-assert.ok(render({time:'23:59'}).texts.includes('Далі графіка немає'));
+assert.ok(render({time:'23:59'}).texts.includes('Час невідомий'));
 const late=render({time:'23:59',kind:'late'});
 assert.ok(late.texts.includes('—'));
-assert.ok(late.texts.includes('01 +1')&&late.texts.includes('04 +1'));
+assert.ok(late.texts.includes('01')&&late.texts.includes('04'));
 assert.ok(late.drawings[0].ops.some(op=>op.color.alpha===0.35));
 assert.equal(late.refresh-late.now,60000);
 const hour=render({time:'17:59'});
 assert.equal(hour.refresh-hour.now,60000,'Request the next hour even without a state change');
-assert.ok(render({kind:'gap'}).texts.includes('Немає даних з'));
+assert.ok(render({kind:'gap'}).texts.includes('Час невідомий'));
 assert.ok(render({time:'21:00',kind:'gap'}).texts.includes('—'));
 assert.equal(render({family:'accessoryInline'}).texts.length,1);
 assert.ok(render({family:'accessoryCircular'}).texts.includes('21:00'));
@@ -100,9 +98,20 @@ for(let minute=0;minute<1440;minute++) {
 for(const [time,state,next] of [['18:59','on','off'],['19:00','off','possible'],['21:00','possible','on'],['21:30','on',undefined]]){
   const model=ctx.lockScreenSchedule(cells,time);assert.equal(model.current.state,state);assert.equal(model.next?.state,next);
 }
-assert.equal(ctx.lockScreenAxis(-60),'23 −1');
-assert.equal(ctx.lockScreenAxis(1440),'00 +1');
-assert.equal(render({hour12:true}).ctx.lockScreenAxis(1440),'12 +1');
+for(const [time,start] of [['18:59',1140],['19:00',1290],['21:00',1290],['21:30',null]]) {
+  assert.equal(ctx.lockScreenSchedule(cells,time).target?.start ?? null,start);
+}
+const interrupted=cells.slice();interrupted[42]='unknown';
+assert.equal(ctx.lockScreenSchedule(interrupted,'19:01').target,null);
+assert.equal(ctx.lockScreenSchedule(Array(48).fill('unknown'),'19:01').target,null);
+const onGap=cells.slice();onGap[37]='unknown';
+assert.equal(ctx.lockScreenSchedule(onGap,'18:00').target,null,'No cutoff prediction across unknown data');
+const errorView=render({kind:'empty'});
+assert.ok(errorView.texts.includes('Чернівці'));
+assert.ok(!errorView.texts.some(t=>t.includes('12')));
+assert.equal(ctx.lockScreenAxis(-60),'23');
+assert.equal(ctx.lockScreenAxis(1440),'00');
+assert.equal(render({hour12:true}).ctx.lockScreenAxis(1440),'12');
 for(const time of ['00:00','19:01','21:01','23:59']) {
   const result=render({time}),drawing=result.drawings[0];
   assert.equal(drawing.respectScreenScale,true);assert.equal(drawing.opaque,false);
