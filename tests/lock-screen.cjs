@@ -36,6 +36,7 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   if(kind==='bounded')cells.fill('off',44);
   if(kind==='endgap')cells.fill('unknown',44);
   if(kind==='noon'){cells.fill('on');cells.fill('off',24,28);}
+  if(kind==='screenshot'){cells.fill('off');cells.fill('on',3,10);}
   if(kind==='yesterday')data.date='2026-11-06';
   if(kind==='stale')data.sourceAt=now-3*3600000;
   const widget=ctx.makeLockScreenWidget(kind==='empty'?null:data,12,now,error,family);
@@ -43,17 +44,21 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   assert.match(widget.url,/group=12$/);
   return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,data,images,drawings,textNodes};
 }
+const clipped=render({time:'00:20',hour12:true,kind:'screenshot'});
+const completeTimes=clipped.textNodes.filter(t=>t.text.includes(':'));
+assert.deepEqual(completeTimes.map(t=>t.text),['1:30 AM','5:00 AM'],'Clock and AM/PM must share one scalable text element');
+for(const text of completeTimes){assert.equal(text.lineLimit,1);assert.ok(text.minimumScaleFactor<=0.65);}
 for(const hour12 of [false,true]){
   const off=render({hour12,kind:'bounded'});
-  assert.equal(off.texts.slice(0,hour12?5:3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
+  assert.equal(off.texts.slice(0,3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
   assert.equal(off.images[0].image.symbol,'bolt');
   assert.ok(!off.texts.some(t=>/Без світла|Можливе|↻|група|год|хв|планового/.test(t)));
   const digits=off.textNodes.filter(t=>t.text.includes(':'));
   assert.equal(digits.length,2);assert.equal(digits[0].font.size,digits[1].font.size);
   const possible=render({time:'21:01',hour12,kind:'bounded'});
-  assert.equal(possible.texts.slice(0,hour12?5:3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
+  assert.equal(possible.texts.slice(0,3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
   const on=render({time:'18:59',hour12});
-  assert.equal(on.texts.slice(0,hour12?5:3).join(''),hour12?'7:00 PM – 9:00 PM':'19:00 – 21:00');
+  assert.equal(on.texts.slice(0,3).join(''),hour12?'7:00 PM – 9:00 PM':'19:00 – 21:00');
   assert.equal(on.images[0].image.symbol,'bolt.slash');
   assert.equal(on.refresh-on.now,60000);
 }
@@ -66,7 +71,7 @@ const noSymbol=render({kind:'bounded',missingSymbol:true});
 assert.ok(noSymbol.texts.some(t=>t.includes('Заживлення')),'Missing symbol keeps event meaning readable');
 assert.ok(noSymbol.texts.includes('21:30')&&noSymbol.texts.includes('22:00'));
 const noon=render({time:'11:59',kind:'noon',hour12:true});
-assert.equal(noon.texts.slice(0,5).join(''),'12:00 PM – 2:00 PM','Already-localized noon must not gain a second PM');
+assert.equal(noon.texts.slice(0,3).join(''),'12:00 PM – 2:00 PM','Already-localized noon must not gain a second PM');
 assert.ok(render({cached:true,kind:'bounded'}).texts.includes('кеш'));
 assert.ok(render({sourceName:'community',kind:'bounded'}).texts.includes('резерв'));
 assert.ok(render({kind:'stale'}).texts.some(t=>t.includes('давні')));

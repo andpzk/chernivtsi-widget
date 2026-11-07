@@ -455,17 +455,13 @@ function addLockScreenTime(container, time, ink) {
   const row = container.addStack();
   row.size = new Size(60, 0);
   row.centerAlignContent();
-  row.addSpacer();
-  // Already localized: adding through addText would format 12:30 PM twice.
-  const parts = displayTimes(time || "—").split(/(\s+[AP]M)$/i).filter(Boolean);
-  for (const [index, part] of parts.entries()) {
-    const text = row.addText(part);
-    text.font = index ? Font.systemFont(9) : Font.semiboldSystemFont(18);
-    text.textColor = ink;
-    text.lineLimit = 1;
-    text.minimumScaleFactor = 0.8;
-  }
-  row.addSpacer();
+  // One text element lets the whole clock scale; separate AM/PM siblings truncated its digits on iPhone.
+  const text = row.addText(displayTimes(time || "—"));
+  text.font = Font.semiboldSystemFont(16);
+  text.textColor = ink;
+  text.lineLimit = 1;
+  text.minimumScaleFactor = 0.65;
+  text.centerAlignText();
 }
 
 function lockScreenAxis(minute) {
