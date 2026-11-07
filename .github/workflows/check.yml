@@ -9,3 +9,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: node --check widget.js
       - run: node tests/updater.cjs
+      - run: node tests/appearance.cjs
