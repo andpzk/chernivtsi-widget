@@ -37,7 +37,7 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   const widget=ctx.makeLockScreenWidget(kind==='empty'?null:data,12,now,error,family);
   assert.ok(widget.refreshAfterDate.getTime()>now);
   assert.match(widget.url,/group=12$/);
-  return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,images,drawings};
+  return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,data,images,drawings};
 }
 for(const hour12 of [false,true]){
   const off=render({hour12});
@@ -98,14 +98,14 @@ for(let minute=0;minute<1440;minute++) {
 for(const [time,state,next] of [['18:59','on','off'],['19:00','off','possible'],['21:00','possible','on'],['21:30','on',undefined]]){
   const model=ctx.lockScreenSchedule(cells,time);assert.equal(model.current.state,state);assert.equal(model.next?.state,next);
 }
-for(const [time,start] of [['18:59',1140],['19:00',1290],['21:00',1290],['21:30',null]]) {
-  assert.equal(ctx.lockScreenSchedule(cells,time).target?.start ?? null,start);
+for(const [time,target] of [['18:59','19:00'],['19:00','21:30'],['21:00','21:30'],['21:30',null]]) {
+  assert.equal(ctx.lockScreenTarget(sample.data,ctx.kyivTimestamp('2026-11-07',time))?.time ?? null,target);
 }
 const interrupted=cells.slice();interrupted[42]='unknown';
-assert.equal(ctx.lockScreenSchedule(interrupted,'19:01').target,null);
-assert.equal(ctx.lockScreenSchedule(Array(48).fill('unknown'),'19:01').target,null);
+assert.equal(ctx.lockScreenTarget({...sample.data,cells:interrupted},sample.now),null);
+assert.equal(ctx.lockScreenTarget({...sample.data,cells:Array(48).fill('unknown')},sample.now),null);
 const onGap=cells.slice();onGap[37]='unknown';
-assert.equal(ctx.lockScreenSchedule(onGap,'18:00').target,null,'No cutoff prediction across unknown data');
+assert.equal(ctx.lockScreenTarget({...sample.data,cells:onGap},ctx.kyivTimestamp('2026-11-07','18:00')),null,'No cutoff prediction across unknown data');
 const errorView=render({kind:'empty'});
 assert.ok(errorView.texts.includes('Чернівці'));
 assert.ok(!errorView.texts.some(t=>t.includes('12')));

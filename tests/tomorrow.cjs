@@ -84,16 +84,32 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
     else if(family==='accessoryCircular'){assert.ok(sample.texts.includes('Завтра о'));assert.ok(sample.texts.includes('01:00'));}
     else assert.ok(sample.texts.some(t=>t.includes('01:00 завтра')));
   }
-  assert.equal(model.target.start,1530);
+  assert.equal(ctx.lockScreenTarget(futureData,at).at,Date.parse('2026-11-07T23:30:00Z'));
   const unknown=nextCells.slice();unknown[0]='unknown';
   assert.equal(ctx.lockScreenSchedule(cells,'23:40',unknown).next.state,'unknown','Do not skip uncertainty to predict restoration');
-  assert.equal(ctx.lockScreenSchedule(cells,'23:40',unknown).target,null);
+  assert.equal(ctx.lockScreenTarget({...futureData,tomorrow:{...futureData.tomorrow,cells:unknown}},at),null);
   for(const [date,duration] of [['2026-03-28','4 год'],['2026-10-24','6 год']]) {
     const at=ctx.kyivTimestamp(date,'23:00'),future=Array(48).fill('on');future.fill('off',0,8);
     const day={date,cells:Array(48).fill('off'),group:12,source:'official',sourceAt:at,checkedAt:at,emergency:false};
     day.tomorrow={...day,date:ctx.shiftDate(date,1),cells:future};sample.texts.length=0;
     ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');assert.ok(sample.texts.slice(1,3).join('')===duration,'Overnight countdown must use elapsed Kyiv time across DST');
   }
+  for (const [instant, end, duration] of [
+    ['2026-10-25T00:15:00Z',7,'15 хв'],
+    ['2026-10-25T01:15:00Z',7,'15 хв'],
+    ['2026-03-29T00:45:00Z',7,'15 хв']
+  ]) {
+    const at=Date.parse(instant),day={date:ctx.kyivParts(at).date,cells:Array(48).fill('on'),source:'official',sourceAt:at,checkedAt:at};
+    day.cells.fill('off',0,end);sample.texts.length=0;
+    ctx.makeLockScreenWidget(day,12,at,'','accessoryRectangular');
+    assert.equal(sample.texts.slice(1,3).join(''),duration,`Actual restoration during DST: ${instant}`);
+  }
+  const springAt=Date.parse('2026-03-29T00:45:00Z');
+  const spring={date:'2026-03-29',cells:Array(48).fill('off'),source:'official',sourceAt:springAt,checkedAt:springAt};
+  spring.cells[6]='on';spring.cells.fill('on',10);
+  assert.equal(ctx.lockScreenTarget(spring,springAt).at,Date.parse('2026-03-29T02:00:00Z'),'A skipped on interval must not become the restoration target');
+  spring.cells[8]='unknown';
+  assert.equal(ctx.lockScreenTarget(spring,springAt),null,'Unknown data after the clock jump must stop the search');
   assert.ok(!ctx.validCache({...data,date:'2026-02-30'},12,captured));
   console.log('PASS: official today/tomorrow fixtures for all groups, publication dates, invalid/withdrawn future data, cache migration/rollover, overnight event ranges and every Lock Screen family.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

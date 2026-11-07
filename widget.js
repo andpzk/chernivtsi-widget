@@ -427,19 +427,26 @@ function lockScreenSchedule(cells, time, tomorrow = null) {
   const ranges = periods(tomorrow ? cells.concat(tomorrow) : cells).map(p => ({...p, start:p.start * 30, end:p.end * 30}));
   const current = ranges.find(p => p.start <= now && p.end > now);
   const next = current && current.state !== "unknown" ? ranges.find(p => p.start === current.end) : null;
-  let target = null;
-  if (current && current.state !== "unknown") {
-    const wanted = current.state === "on" ? "off" : "on";
-    for (const period of ranges) {
-      if (period.start < current.end) continue;
-      if (period.state === "unknown") break;
-      if (period.state === wanted) { target = period; break; }
-    }
-  }
   const coverage = [{start:-60,end:0,state:"unknown"}, ...ranges, {start:tomorrow ? 2880 : 1440,end:3240,state:"unknown"}];
   const segments = coverage.filter(p => p.end > start && p.start < end)
     .map(p => ({state:p.state, start:Math.max(start,p.start), end:Math.min(end,p.end)}));
-  return {now, start, end, current, next, target, segments, marker:(now - start) / 360};
+  return {now, start, end, current, next, segments, marker:(now - start) / 360};
+}
+
+function lockScreenTarget(data, now) {
+  const current = kyivParts(now), state = data.cells[current.slot];
+  if (state === "unknown") return null;
+  const tomorrow = nextDayCells(data), nextDate = shiftDate(data.date, 1);
+  const end = kyivTimestamp(shiftDate(data.date, tomorrow ? 2 : 1), "00:00");
+  const wanted = state === "on" ? "off" : "on", halfHour = 30 * 60000;
+  // Walk real boundaries so repeated/skipped Kyiv hours agree with the state shown at that instant.
+  for (let at = (Math.floor(now / halfHour) + 1) * halfHour; at < end; at += halfHour) {
+    const p = kyivParts(at);
+    const cells = p.date === data.date ? data.cells : p.date === nextDate ? tomorrow : null;
+    if (!cells || cells[p.slot] === "unknown") break;
+    if (cells[p.slot] === wanted) return {at, time:p.time};
+  }
+  return null;
 }
 
 function lockScreenAxis(minute) {
@@ -475,7 +482,7 @@ function lockScreenStrip(model, width) {
 }
 
 function addLockScreenSchedule(widget, data, p, checked, ink, now) {
-  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data)), target = model.target;
+  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data)), target = lockScreenTarget(data, now);
   const frame = widget.addStack();
   frame.addSpacer();
   const content = frame.addStack();
@@ -488,10 +495,9 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   addText(content, target ? isOn ? "Наступне відключення" : "До планового заживлення" : "Час невідомий", 10, ink);
   const event = content.addStack();
   event.centerAlignContent();
-  if (!target || isOn) addText(event, target ? clock(target.start / 30 % 48) : "—", 24, ink, true);
+  if (!target || isOn) addText(event, target ? target.time : "—", 24, ink, true);
   else {
-    const date = shiftDate(data.date, Math.floor(target.start / 1440));
-    const left = Math.max(0, Math.ceil((kyivTimestamp(date,clock(target.start / 30 % 48)) - now) / 60000));
+    const left = Math.ceil((target.at - now) / 60000);
     if (left >= 60) {
       addText(event, String(Math.floor(left / 60)), 24, ink, true);
       addText(event, " год", 12, ink);
