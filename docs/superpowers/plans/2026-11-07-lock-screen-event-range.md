@@ -17,7 +17,7 @@ Missing coverage must not invent an interval end; midnight continuity must merge
 **Files:** canonical `../Chernivtsi Electricity.js`, generated `widget.js`, `tests/lock-screen.cjs`, `tests/appearance.cjs`, `tests/tomorrow.cjs`, `README.md`; standalone text and designer exports, `../lock-screen-clean-preview.html`, `../../work/check-clean-preview.cjs`.
 **Interfaces:** target keeps `at,time`, adds `state,endAt,endTime` (null end if unknown). The rectangular renderer consumes the range; other families keep their existing model.
 
-- [ ] Add assertions for ranges/icons, two AM/PM labels, next-day ends, unknown ends, DST, fallback symbols, and unchanged other families. Run tests: expect new range assertions to fail.
-- [ ] Implement the target end and native icon/range row. Update documentation and regenerate exports. Browser unknown-end behavior must match native.
-- [ ] Run syntax and all four repository suites, standalone, browser-preview and designer checks; expect all pass. Commit.
+- [x] Add assertions for ranges/icons, two AM/PM labels, next-day ends, unknown ends, DST, fallback symbols, and unchanged other families. Run tests: expect new range assertions to fail.
+- [x] Implement the target end and native icon/range row. Update documentation and regenerate exports. Browser unknown-end behavior must match native.
+- [x] Run syntax and all four repository suites, standalone, browser-preview and designer checks; expect all pass. Commit.
 - [ ] Obtain one fresh branch review; fix important issues with regression coverage. Push branch and create PR; verify required CI, leave unmerged.
