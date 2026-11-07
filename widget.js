@@ -556,7 +556,7 @@ function makeLockScreenWidget(data, group, now, error, family) {
   const p = kyivParts(now);
   const usable = data && data.date === p.date && !error;
   const state = usable && !data.emergency ? data.cells[p.slot] : "unknown";
-  const names = {on:"Є світло", off:"Без світла", possible:"Можливе заживлення", unknown:"Немає даних"};
+  const names = {on:"Є світло", off:"Нема світла", possible:"Зараз буде", unknown:"Немає даних"};
   const status = error ? (error.includes("групу") ? "Перевірте групу" : "Немає даних") : !usable ? "Немає графіка" : data.emergency ? "Аварійні відключення" : names[state];
   let detail = error || (!usable ? "Оновіть у Scriptable" : data.emergency ? "Час заживлення невідомий" : "Далі немає даних");
   let nextTime = "";
@@ -643,19 +643,15 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   header.addSpacer();
   if (view) {
     const color = view.state === "on" ? green : view.state === "off" ? red : amber;
-    const names = {on:"Є світло", off:"Без світла", possible:"Можливо світло", unknown:"Немає даних"};
+    const names = {on:"Є світло", off:"Нема світла", possible:"Зараз буде", unknown:"Немає даних"};
     const badge = header.addStack();
     badge.centerAlignContent();
     badge.spacing = 5;
     const symbol = SFSymbol.named({on:"bolt.fill", off:"bolt.slash.fill", possible:"bolt.fill", unknown:"questionmark.circle"}[view.state]);
     if (symbol) {
-      const iconRow = badge.addStack();
-      iconRow.centerAlignContent();
-      iconRow.spacing = 1;
-      const icon = iconRow.addImage(symbol.image);
+      const icon = badge.addImage(symbol.image);
       icon.imageSize = new Size(12, 14);
       icon.tintColor = color;
-      if (view.state === "possible") addText(iconRow, "?", 9, color, true);
     }
     addText(badge, names[view.state], 14, color, true);
   } else addText(header, p.date.slice(8) + "." + p.date.slice(5, 7), 11, muted);

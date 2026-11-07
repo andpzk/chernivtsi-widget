@@ -52,7 +52,7 @@ for(const hour12 of [false,true]){
   const off=render({hour12,kind:'bounded'});
   assert.equal(off.texts.slice(0,3).join(''),hour12?'9:30 PM – 10:00 PM':'21:30 – 22:00');
   assert.equal(off.images[0].image.symbol,'bolt');
-  assert.ok(!off.texts.some(t=>/Без світла|Можливе|↻|група|год|хв|планового/.test(t)));
+  assert.ok(!off.texts.some(t=>/Нема світла|Зараз буде|Можливе|↻|група|год|хв|планового/.test(t)));
   const digits=off.textNodes.filter(t=>t.text.includes(':'));
   assert.equal(digits.length,2);assert.equal(digits[0].font.size,digits[1].font.size);
   const possible=render({time:'21:01',hour12,kind:'bounded'});
