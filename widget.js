@@ -532,7 +532,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   if (target && !target.endTime) notices.push("кінець невідомий");
   event.size = new Size(width, notices.length ? 22 : 26);
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
-  content.addSpacer(notices.length ? 2 : 4);
+  content.addSpacer(notices.length ? 5 : 7);
   const strip = content.addImage(lockScreenStrip(model, width));
   strip.imageSize = new Size(width,14);
   strip.tintColor = ink;
@@ -588,8 +588,8 @@ function makeLockScreenWidget(data, group, now, error, family) {
     return widget;
   }
   if (usable && !data.emergency) {
-    // Lift the ruler toward adjacent circular-widget labels; keep room for quality warnings.
-    widget.setPadding(2, 3, 10, 3);
+    // Move 3pt from bottom padding to the pre-strip gap, preserving the time row's position.
+    widget.setPadding(2, 3, 7, 3);
     // The six-hour window advances on the hour even when the scheduled state is unchanged.
     widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), (Math.floor(now / 3600000) + 1) * 3600000));
     addLockScreenSchedule(widget, data, p, checked, ink, now);
@@ -621,7 +621,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const green = themeColor("487E64", "72C69B");
   const gradient = new LinearGradient();
   gradient.colors = GLASS_STYLE
-    ? [themeColor("F5F8FC", "35464E"), themeColor("E8EEF5", "1E2836"), themeColor("E1E8F1", "171F2D"), themeColor("DCE4EE", "35445B")]
+    ? [themeColor("F5F8FC", "202F38"), themeColor("E8EEF5", "111925"), themeColor("E1E8F1", "0B121C"), themeColor("DCE4EE", "202D40")]
     : [themeColor("FFFFFF", "202020"), themeColor("F6F6F6", "161616"), themeColor("F0F0F0", "0B0B0B")];
   gradient.locations = GLASS_STYLE ? [0, 0.3, 0.65, 1] : [0, 0.5, 1];
   gradient.startPoint = new Point(GLASS_STYLE ? 0 : 0.5, 0);
