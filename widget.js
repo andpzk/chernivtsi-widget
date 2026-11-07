@@ -2,6 +2,7 @@
 // Scriptable: Calm / Calendar-style medium Home Screen widget. Default outage group: 12.
 // Widget Parameter can override the group with a number from 1 to 12.
 const DEFAULT_GROUP = 12;
+const GLASS_STYLE = true;
 const OFFICIAL_URL = "https://oblenergo.cv.ua/shutdowns/";
 const FALLBACK_URL = "https://raw.githubusercontent.com/chaichuk/UA-power-outages-monitor/main/artifacts/chernivtsi.json";
 const REFRESH_MINUTES = 15;
@@ -331,22 +332,74 @@ function nextRefreshAt(data, now) {
   return next;
 }
 
+function glassReflections(width, height) {
+  const ctx = new DrawContext();
+  ctx.size = new Size(width, height);
+  ctx.opaque = false;
+  ctx.respectScreenScale = true;
+  // Neutral transparent highlights work with both dynamic background palettes.
+  for (let i = 40; i > 0; i--) {
+    const scale = i / 40;
+    ctx.setFillColor(new Color("FFFFFF", 0.007));
+    ctx.fillEllipse(new Rect(width * (0.2 - scale * 0.75), -height * (0.22 + scale * 0.6), width * scale * 1.5, height * scale * 1.2));
+    ctx.setFillColor(new Color("DCEAFF", 0.004));
+    ctx.fillEllipse(new Rect(width * (1 - scale * 0.7), height * (1.22 - scale * 0.5), width * scale * 1.4, height * scale));
+  }
+  const rim = new Path();
+  rim.addRoundedRect(new Rect(0.6, 0.6, width - 1.2, height - 1.2), 26, 26);
+  ctx.addPath(rim);
+  ctx.setStrokeColor(new Color("FFFFFF", 0.2));
+  ctx.setLineWidth(0.7);
+  ctx.strokePath();
+  // Bright corners taper into the rim instead of outlining the whole card equally.
+  for (const bottom of [false, true]) {
+    const edge = new Path();
+    const mirror = (x, y) => new Point(bottom ? width - x : x, bottom ? height - y : y);
+    edge.move(mirror(0.6, 26));
+    for (let i = 1; i <= 16; i++) {
+      const angle = Math.PI + i / 16 * Math.PI / 2;
+      edge.addLine(mirror(26 + 25.4 * Math.cos(angle), 26 + 25.4 * Math.sin(angle)));
+    }
+    ctx.addPath(edge);
+    ctx.setStrokeColor(new Color("FFFFFF", bottom ? 0.32 : 0.5));
+    ctx.strokePath();
+    for (let x = 26; x < width * 0.8; x += 2) {
+      const opacity = (bottom ? 0.25 : 0.4) * Math.pow(1 - (x - 26) / (width * 0.8 - 26), 2);
+      ctx.setFillColor(new Color("FFFFFF", opacity));
+      ctx.fillRect(new Rect(bottom ? width - x - 2 : x, bottom ? height - 1.1 : 0.4, 2, 0.7));
+    }
+  }
+  return ctx.getImage();
+}
+
 function makeWidget(data, group, now, error = "", settings = {}) {
-  const widget = new ListWidget();
+  const host = new ListWidget();
+  const widget = host.addStack();
+  widget.layoutVertically();
+  const surfaceWidth = Number.isFinite(settings.widgetWidth) && settings.widgetWidth >= 300 && settings.widgetWidth <= 500 ? settings.widgetWidth : 378;
+  const surfaceHeight = Math.abs(surfaceWidth - 378) < 2 ? 530 / 3 : 170;
+  widget.size = new Size(surfaceWidth, surfaceHeight);
+  host.setPadding(0, 0, 0, 0);
   const ink = themeColor("181B23", "F6F7FB");
-  const muted = themeColor("5D6370", "B5BDCD");
+  const muted = themeColor(GLASS_STYLE ? "525E70" : "5D6370", "B5BDCD");
   const amber = themeColor("916214", "CFB879");
   const red = themeColor("A95E64", "DC8587");
   const green = themeColor("487E64", "72C69B");
   const gradient = new LinearGradient();
-  gradient.colors = [themeColor("FFFFFF", "202020"), themeColor("F6F6F6", "161616"), themeColor("F0F0F0", "0B0B0B")];
-  gradient.locations = [0, 0.5, 1];
-  gradient.startPoint = new Point(0.5, 0);
-  gradient.endPoint = new Point(0.5, 1);
-  widget.backgroundGradient = gradient;
+  gradient.colors = GLASS_STYLE
+    ? [themeColor("F5F8FC", "35464E"), themeColor("E8EEF5", "1E2836"), themeColor("E1E8F1", "171F2D"), themeColor("DCE4EE", "35445B")]
+    : [themeColor("FFFFFF", "202020"), themeColor("F6F6F6", "161616"), themeColor("F0F0F0", "0B0B0B")];
+  gradient.locations = GLASS_STYLE ? [0, 0.3, 0.65, 1] : [0, 0.5, 1];
+  gradient.startPoint = new Point(GLASS_STYLE ? 0 : 0.5, 0);
+  gradient.endPoint = new Point(GLASS_STYLE ? 1 : 0.5, 1);
+  host.backgroundGradient = gradient;
+  if (GLASS_STYLE) {
+    widget.cornerRadius = 26;
+    widget.backgroundImage = glassReflections(surfaceWidth, surfaceHeight);
+  }
   widget.setPadding(12, 16, 16, 16);
-  widget.refreshAfterDate = new Date(nextRefreshAt(error ? null : data, now));
-  widget.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
+  host.refreshAfterDate = new Date(nextRefreshAt(error ? null : data, now));
+  host.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
   const p = kyivParts(now);
   const usable = data && data.date === p.date && !error;
   const view = usable && !data.emergency ? eventView(data.cells, p.slot) : null;
@@ -379,7 +432,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     addText(widget, "Торкніться, щоб перевірити ще раз", 11, muted);
     widget.addSpacer();
     addText(widget, data ? `Останні дані: ${data.date}` : "Успішного оновлення ще не було", 11, muted);
-    return widget;
+    return host;
   }
   const stale = now - data.sourceAt > 7200000;
   const notices = [];
@@ -426,7 +479,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     widget.addSpacer(4);
     const graphic = timelineGraphic(data.cells, p.time);
     const chart = widget.addStack();
-    const displayWidth = Number.isFinite(settings.widgetWidth) && settings.widgetWidth >= 300 && settings.widgetWidth <= 500 ? settings.widgetWidth - 32 : 346;
+    const displayWidth = surfaceWidth - 32;
     // Both layers must share one frame; a flexible spacer shifted the marker relative to the bar.
     chart.size = new Size(displayWidth, displayWidth * graphic.size.height / graphic.size.width);
     chart.setPadding(0, 0, 0, 0);
@@ -448,7 +501,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
       addText(ticks, label, axisFont, muted);
     });
   } else widget.addSpacer();
-  return widget;
+  return host;
 }
 
 async function buildWidget(settings = {}) {
