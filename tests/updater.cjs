@@ -18,10 +18,11 @@ function release(version, fails = false) {
 }
 async function run(files, {remote=release('one'),offline=false,status=200,app=false,now=start,group='12',brokenStateWrite=false}={}) {
   let widget, finished=false, requests=0, imports=0;
+  const missingReads=[];
   class FixedDate extends Date {constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
   const fm = {
     libraryDirectory:()=>'/lib', joinPath:(a,b)=>a+'/'+b, createDirectory(){},
-    fileExists:p=>files.has(p), readString(p){if(!files.has(p))throw Error('Missing');return files.get(p);},
+    fileExists:p=>files.has(p), readString(p){if(!files.has(p)){missingReads.push(p);throw Error('Missing');}return files.get(p);},
     writeString(p,s){if(brokenStateWrite&&p===statePath){files.set(p,'{partial');throw Error('Interrupted write');}files.set(p,s);},
     remove:p=>files.delete(p)
   };
@@ -38,6 +39,7 @@ async function run(files, {remote=release('one'),offline=false,status=200,app=fa
   sandbox.importModule=p=>{imports++;return vm.runInContext(`(function(module){${fm.readString(p)}\nreturn module.exports;})({exports:{}})`,context);};
   await vm.runInContext(`(async()=>{${installer}})()`,context);
   assert.ok(finished);
+  assert.deepEqual(missingReads,[], 'Missing files must be checked before reading: Scriptable logs even caught errors');
   return {widget,requests,imports};
 }
 

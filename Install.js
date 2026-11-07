@@ -14,6 +14,7 @@ async function loadWidget() {
   const validFile = name => typeof name === "string" && /^[0-9a-f-]{36}\.js$/i.test(name) && fm.fileExists(filePath(name));
   let state = {current: null, previous: null, checkedAt: 0};
   for (const path of [statePath, backupPath]) {
+    if (!fm.fileExists(path)) continue;
     try {
       const saved = JSON.parse(fm.readString(path));
       if (validFile(saved.current) || validFile(saved.previous)) {
