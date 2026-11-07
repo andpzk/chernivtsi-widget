@@ -10,3 +10,4 @@ jobs:
       - run: node --check widget.js
       - run: node tests/updater.cjs
       - run: node tests/appearance.cjs
+      - run: node tests/lock-screen.cjs
