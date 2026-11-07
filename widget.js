@@ -439,14 +439,33 @@ function lockScreenTarget(data, now) {
   const tomorrow = nextDayCells(data), nextDate = shiftDate(data.date, 1);
   const end = kyivTimestamp(shiftDate(data.date, tomorrow ? 2 : 1), "00:00");
   const wanted = state === "on" ? "off" : "on", halfHour = 30 * 60000;
+  let target = null;
   // Walk real boundaries so repeated/skipped Kyiv hours agree with the state shown at that instant.
   for (let at = (Math.floor(now / halfHour) + 1) * halfHour; at < end; at += halfHour) {
     const p = kyivParts(at);
     const cells = p.date === data.date ? data.cells : p.date === nextDate ? tomorrow : null;
     if (!cells || cells[p.slot] === "unknown") break;
-    if (cells[p.slot] === wanted) return {at, time:p.time};
+    if (target && cells[p.slot] !== wanted) return {...target, endAt:at, endTime:p.time};
+    if (!target && cells[p.slot] === wanted) target = {at, time:p.time, state:wanted, endAt:null, endTime:null};
   }
-  return null;
+  return target;
+}
+
+function addLockScreenTime(container, time, ink) {
+  const row = container.addStack();
+  row.size = new Size(60, 0);
+  row.centerAlignContent();
+  row.addSpacer();
+  // Already localized: adding through addText would format 12:30 PM twice.
+  const parts = displayTimes(time || "—").split(/(\s+[AP]M)$/i).filter(Boolean);
+  for (const [index, part] of parts.entries()) {
+    const text = row.addText(part);
+    text.font = index ? Font.systemFont(9) : Font.semiboldSystemFont(18);
+    text.textColor = ink;
+    text.lineLimit = 1;
+    text.minimumScaleFactor = 0.8;
+  }
+  row.addSpacer();
 }
 
 function lockScreenAxis(minute) {
@@ -491,26 +510,33 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   const width = 150;
   content.size = new Size(width, 0);
   frame.addSpacer();
-  const isOn = model.current.state === "on";
-  addText(content, target ? isOn ? "Наступне відключення" : "До планового заживлення" : "Час невідомий", 10, ink);
   const event = content.addStack();
+  event.size = new Size(width, 34);
   event.centerAlignContent();
-  if (!target || isOn) addText(event, target ? target.time : "—", 24, ink, true);
-  else {
-    const left = Math.ceil((target.at - now) / 60000);
-    if (left >= 60) {
-      addText(event, String(Math.floor(left / 60)), 24, ink, true);
-      addText(event, " год", 12, ink);
-    }
-    if (left % 60 || left < 60) {
-      if (left >= 60) event.addSpacer(4);
-      addText(event, String(left % 60), 24, ink, true);
-      addText(event, " хв", 12, ink);
-    }
+  const iconFrame = event.addStack();
+  iconFrame.size = new Size(16, 0);
+  const symbol = SFSymbol.named(target ? target.state === "on" ? "bolt" : "bolt.slash" : "questionmark.circle");
+  if (symbol) {
+    const icon = iconFrame.addImage(symbol.image);
+    icon.imageSize = new Size(16, 20);
+    icon.tintColor = ink;
+    icon.applyFittingContentMode();
+  } else addText(iconFrame, target ? target.state === "on" ? "+" : "−" : "?", 14, ink);
+  event.addSpacer(4);
+  if (target) {
+    addLockScreenTime(event, target.time, ink);
+    const separator = event.addStack();
+    separator.size = new Size(10, 0);
+    addText(separator, " – ", 12, ink);
+    addLockScreenTime(event, target.endTime, ink);
+  } else {
+    addText(event, "Час невідомий", 12, ink);
   }
   const notices = checked.split(" · ").slice(1);
+  if (!symbol && target) notices.unshift(target.state === "on" ? "Заживлення" : "Відключення");
+  if (target && !target.endTime) notices.push("кінець невідомий");
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
-  content.addSpacer(1);
+  content.addSpacer(notices.length ? 2 : 8);
   const strip = content.addImage(lockScreenStrip(model, width));
   strip.imageSize = new Size(width,14);
   strip.tintColor = ink;
