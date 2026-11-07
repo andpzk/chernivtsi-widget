@@ -105,9 +105,9 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
       assert.ok(statusIcon,'Show a distinct status icon alongside the label');
       assert.deepEqual({...statusIcon.imageSize},{width:12,height:14});
       assert.equal(statusIcon.tintColor.dark.hex,{on:'72C69B',off:'DC8587',possible:'CFB879',unknown:'CFB879'}[currentState]);
-      if(currentState==='possible')assert.ok(texts.some(t=>t.text==='?'&&t.font.size===9));
+      if(currentState==='possible')assert.ok(!texts.some(t=>t.text==='?'));
     }
-    assert.ok(texts.some(t=>t.text==={on:'Є світло',off:'Без світла',possible:'Можливо світло',unknown:'Немає даних'}[currentState]),'Keep the readable status when icons are unavailable');
+    assert.ok(texts.some(t=>t.text==={on:'Є світло',off:'Нема світла',possible:'Зараз буде',unknown:'Немає даних'}[currentState]),'Keep the readable status when icons are unavailable');
     const marker=images.find(image=>image.tintColor?.light?.hex==='000000');
     assert.ok(marker);assert.equal(marker.tintColor.dark.hex,'F6F7FB');
     assert.equal(marker.imageSize.width,expectedWidth-32);
