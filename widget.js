@@ -34,11 +34,17 @@ function plain(html) {
   return html.replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;/g, " ").trim();
 }
 
-function parseOfficial(html, group, now) {
+function shiftDate(date, days) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function parseOfficial(html, group, now, expectedDate = kyivParts(now).date) {
   const table = html.match(/<div\b[^>]*\bid=["']gsv["'][^>]*>([\s\S]*)/i);
   if (!table) {
     if (/class=["'][^"']*wrap_article_v2_emergency\b/i.test(html)) {
-      return {date: kyivParts(now).date, emergency: true, source: "official",
+      return {date: expectedDate, emergency: true, source: "official",
         sourceAt: now, cells: Array(48).fill("unknown")};
     }
     throw new Error("Official schedule is unavailable");
@@ -50,7 +56,7 @@ function parseOfficial(html, group, now) {
   const axis = table[1].match(/<\/ul>\s*<div\b[^>]*>\s*<p\b[^>]*>([\s\S]*?)<\/p>/i);
   if (!dateMatch || !row || !axis || !sourceTime) throw new Error("Official page format changed");
   const date = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
-  if (date !== kyivParts(now).date) throw new Error("Official schedule is not for today");
+  if (date !== expectedDate) throw new Error("Official schedule is not for today/requested date");
   const hours = [...axis[1].matchAll(/<b\b[^>]*>\s*(\d{1,2})\s*<em\b[^>]*>:00<\/em>\s*<\/b>/gi)]
     .map(m => Number(m[1]));
   if (hours.length && hours[hours.length - 1] === 0) hours.pop();
@@ -67,7 +73,8 @@ function parseOfficial(html, group, now) {
     if (plain(m[2]).toUpperCase() !== words[tag]) throw new Error("Unknown official status");
     cells[hours[0] * 2 + i] = tags[tag];
   });
-  const sourceAt = kyivTimestamp(date, `${sourceTime[1].padStart(2, "0")}:${sourceTime[2]}`);
+  // The next-day page reports today's publication time, not a timestamp tomorrow.
+  const sourceAt = kyivTimestamp(kyivParts(now).date, `${sourceTime[1].padStart(2, "0")}:${sourceTime[2]}`);
   if (sourceAt > now + 300000) throw new Error("Official update time is in the future");
   return {date, cells, emergency: false, source: "official", sourceAt};
 }
@@ -95,6 +102,8 @@ function parseFallback(json, group, now) {
 function validCache(data, group, now) {
   return data && data.group === group && ["official", "community"].includes(data.source)
     && /^\d{4}-\d{2}-\d{2}$/.test(data.date) && typeof data.emergency === "boolean"
+    && Number.isFinite(Date.parse(`${data.date}T12:00:00Z`))
+    && new Date(`${data.date}T12:00:00Z`).toISOString().slice(0,10) === data.date
     && Number.isFinite(data.checkedAt) && Number.isFinite(data.sourceAt)
     && data.checkedAt <= now + 300000 && data.sourceAt <= now + 300000 && now - data.checkedAt < 86400000
     && Array.isArray(data.cells) && data.cells.length === 48
@@ -131,12 +140,19 @@ async function getSchedule(group, now) {
   try {
     if (fm.fileExists(path)) {
       const saved = JSON.parse(fm.readString(path));
-      if (validCache(saved, group, now)) cached = saved;
+      if (validCache(saved, group, now)) {
+        cached = saved;
+        if (cached.tomorrow && (!validCache({...cached.tomorrow, group}, group, now)
+            || cached.tomorrow.date !== shiftDate(cached.date, 1))) delete cached.tomorrow;
+        if (cached.tomorrow && cached.tomorrow.date === kyivParts(now).date) cached = {...cached.tomorrow, group};
+      }
     }
   } catch (e) { console.log(`Cache read: ${e.message}`); }
   let data;
+  const [todayPage, tomorrowPage] = await Promise.allSettled([download(OFFICIAL_URL), download(`${OFFICIAL_URL}?next`)]);
   try {
-    data = parseOfficial(await download(OFFICIAL_URL), group, now);
+    if (todayPage.status === "rejected") throw todayPage.reason;
+    data = parseOfficial(todayPage.value, group, now);
   } catch (e) {
     console.log(`Official source: ${e.message}`);
     // A known emergency must never be overwritten by a binary community schedule.
@@ -146,13 +162,40 @@ async function getSchedule(group, now) {
     try { data = parseFallback(JSON.parse(await download(FALLBACK_URL)), group, now); }
     catch (fallbackError) {
       console.log(`Community source: ${fallbackError.message}`);
-      return cached ? {...cached, cached: true} : null;
+      data = cached ? {...cached, cached: true} : null;
     }
   }
-  data = {...data, group, checkedAt: Date.now()};
-  try { fm.writeString(path, JSON.stringify(data)); }
+  if (!data) return null;
+  if (!data.cached) data = {...data, group, checkedAt: Date.now()};
+  // Replace optional future data on every successful read; never retain a withdrawn schedule.
+  if (!data.emergency && data.date === kyivParts(now).date) {
+    if (tomorrowPage.status === "fulfilled") {
+      delete data.tomorrow;
+      try {
+        const tomorrow = parseOfficial(tomorrowPage.value, group, now, shiftDate(data.date, 1));
+        if (!tomorrow.emergency) data.tomorrow = {...tomorrow, checkedAt:Date.now()};
+      } catch (e) { console.log(`Tomorrow schedule: ${e.message}`); }
+    } else if (cached && cached.date === data.date && cached.tomorrow) {
+      data.tomorrow = {...cached.tomorrow, cached:true};
+    }
+  }
+  try { if (!data.cached || tomorrowPage.status === "fulfilled") fm.writeString(path, JSON.stringify(data)); }
   catch (e) { console.log(`Cache write: ${e.message}`); }
   return data;
+}
+
+function nextDayCells(data) {
+  const day = data && data.tomorrow;
+  return day && !day.emergency && day.date === shiftDate(data.date, 1)
+    && Array.isArray(day.cells) && day.cells.length === 48
+    && day.cells.every(s => Object.prototype.hasOwnProperty.call(COLORS,s)) ? day.cells : null;
+}
+
+function scheduleQuality(data) {
+  if (!nextDayCells(data)) return data;
+  const day = data.tomorrow;
+  return {...data, cached:!!(data.cached || day.cached),
+    sourceAt:Math.min(data.sourceAt,day.sourceAt), checkedAt:Math.min(data.checkedAt,day.checkedAt)};
 }
 
 function themeColor(light, dark) {
@@ -278,18 +321,24 @@ function scheduleView(cells, slot) {
     value:state === "off" && current.end === 48 ? "До 24:00" : "Невідомо", detail:"Далі немає прогнозу", following};
 }
 
-function eventView(cells, slot) {
+function eventView(cells, slot, tomorrow = null) {
   const view = scheduleView(cells, slot);
-  const ranges = periods(cells);
+  const ranges = periods(tomorrow ? cells.concat(tomorrow) : cells);
   const current = ranges.findIndex(p => p.start <= slot && p.end > slot);
   const index = view.state === "unknown" ? -1 : view.state === "on" ? current + 1 : current;
   const primary = ranges[index];
   const following = primary && primary.state !== "unknown" ? ranges[index + 1] : null;
   const labels = {on:"заживлення", off:"відключення", possible:"можливе заживлення", unknown:"немає даних"};
-  const headline = view.state === "off" ? "Відключення триває" : view.state === "possible" ? "Невизначений період" : view.headline;
-  return {...view, headline, value:primary ? clock(primary.start) : view.value,
-    detail:primary ? clock(primary.end) : view.detail,
-    following:following ? `Потім ${clock(following.start)} – ${clock(following.end)} · ${labels[following.state]}` : ""};
+  let headline = view.state === "off" ? "Відключення триває" : view.state === "possible" ? "Невизначений період" : view.headline;
+  if (tomorrow && primary) {
+    if (view.state === "on") headline = {off:"Наступне відключення",possible:"Невизначений період",unknown:"Дані відсутні з"}[primary.state] || headline;
+    headline += primary.start >= 48 ? " · завтра" : primary.end > 48 ? " · до завтра" : "";
+  }
+  const rangeClock = end => clock(end > 48 ? end % 48 || 48 : end);
+  const followingDay = following && following.start >= 48 ? " завтра" : following && following.end > 48 ? " до завтра" : "";
+  return {...view, headline, value:primary ? clock(primary.start % 48) : view.value,
+    detail:primary ? rangeClock(primary.end) : view.detail,
+    following:following ? `Потім ${clock(following.start % 48)} – ${rangeClock(following.end)}${followingDay} · ${labels[following.state]}` : ""};
 }
 
 function timelineGraphic(cells, time) {
@@ -372,13 +421,13 @@ function glassReflections(width, height) {
   return ctx.getImage();
 }
 
-function lockScreenSchedule(cells, time) {
+function lockScreenSchedule(cells, time, tomorrow = null) {
   const [hour, minute] = time.split(":").map(Number);
   const now = hour * 60 + minute, start = hour * 60 - 60, end = start + 360;
-  const ranges = periods(cells).map(p => ({...p, start:p.start * 30, end:p.end * 30}));
+  const ranges = periods(tomorrow ? cells.concat(tomorrow) : cells).map(p => ({...p, start:p.start * 30, end:p.end * 30}));
   const current = ranges.find(p => p.start <= now && p.end > now);
   const next = current && current.state !== "unknown" ? ranges.find(p => p.start === current.end) : null;
-  const coverage = [{start:-60,end:0,state:"unknown"}, ...ranges, {start:1440,end:1800,state:"unknown"}];
+  const coverage = [{start:-60,end:0,state:"unknown"}, ...ranges, {start:tomorrow ? 2880 : 1440,end:3240,state:"unknown"}];
   const segments = coverage.filter(p => p.end > start && p.start < end)
     .map(p => ({state:p.state, start:Math.max(start,p.start), end:Math.min(end,p.end)}));
   return {now, start, end, current, next, segments, marker:(now - start) / 360};
@@ -416,8 +465,8 @@ function lockScreenStrip(model, width) {
   return ctx.getImage();
 }
 
-function addLockScreenSchedule(widget, data, group, p, checked, ink) {
-  const model = lockScreenSchedule(data.cells, p.time), next = model.next;
+function addLockScreenSchedule(widget, data, group, p, checked, ink, now) {
+  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data)), next = model.next;
   const frame = widget.addStack();
   frame.addSpacer();
   const content = frame.addStack();
@@ -434,16 +483,19 @@ function addLockScreenSchedule(widget, data, group, p, checked, ink) {
   addText(header, checkedTime, 7.5, ink);
   const event = content.addStack();
   event.centerAlignContent();
-  addText(event, next ? clock(next.start / 30) : "—", 20, ink, true);
+  addText(event, next ? clock(next.start / 30 % 48) : "—", 20, ink, true);
   event.addSpacer();
   // Data-quality notices take the countdown's space; never hide them to fit the accessory.
   if (notices.length) addText(event, notices.join(" · "), 7.5, ink);
   else if (next) {
-    const left = next.start - model.now;
+    const left = next.start >= 1440
+      ? Math.ceil((kyivTimestamp(shiftDate(data.date,1),clock(next.start / 30 % 48)) - now) / 60000)
+      : next.start - model.now;
     const duration = left >= 60 ? `${Math.floor(left / 60)} год${left % 60 ? ` ${left % 60} хв` : ""}` : `${left} хв`;
     addText(event, `ще ${duration}`, 8, ink);
   }
-  const label = next ? {on:"Планове заживлення",off:"Відключення",possible:"Можливе заживлення",unknown:"Немає даних з"}[next.state] : "Далі графіка немає";
+  let label = next ? {on:"Планове заживлення",off:"Відключення",possible:"Можливе заживлення",unknown:"Немає даних з"}[next.state] : "Далі графіка немає";
+  if (next && next.start >= 1440) label += " · завтра";
   addText(content, label, 10, ink);
   content.addSpacer(1);
   const strip = content.addImage(lockScreenStrip(model, width));
@@ -461,6 +513,7 @@ function addLockScreenSchedule(widget, data, group, p, checked, ink) {
 }
 
 function makeLockScreenWidget(data, group, now, error, family) {
+  if (data) data = scheduleQuality(data);
   const widget = new ListWidget();
   const ink = new Color("FFFFFF");
   widget.refreshAfterDate = new Date(nextRefreshAt(error ? null : data, now));
@@ -473,9 +526,9 @@ function makeLockScreenWidget(data, group, now, error, family) {
   let detail = error || (!usable ? "Оновіть у Scriptable" : data.emergency ? "Час заживлення невідомий" : "Далі немає даних");
   let nextTime = "";
   if (usable && !data.emergency && state !== "unknown") {
-    const next = periods(data.cells).find(range => range.start > p.slot);
+    const next = lockScreenSchedule(data.cells, p.time, nextDayCells(data)).next;
     if (next) {
-      nextTime = clock(next.start);
+      nextTime = clock(next.start / 30 % 48) + (next.start >= 1440 ? " завтра" : "");
       detail = `${{on:"Заживлення з", off:"Відключення о", possible:"Можливе заживлення з", unknown:"Немає даних з"}[next.state]} ${nextTime}`;
     } else if (state === "on") detail = "За графіком до кінця доби";
   }
@@ -493,8 +546,8 @@ function makeLockScreenWidget(data, group, now, error, family) {
     const line = (text, size, bold = false) => addText(widget, text, size, ink, bold).centerAlignText();
     widget.addSpacer();
     line(shortStatus, 9, true);
-    line(nextTime ? "Зміна о" : "Графік", 8);
-    line(nextTime || "—", 14, true);
+    line(nextTime ? nextTime.includes("завтра") ? "Завтра о" : "Зміна о" : "Графік", 8);
+    line(nextTime.replace(" завтра", "") || "—", 14, true);
     line(`${group}${data && data.cached ? " · кеш" : " група"}`, 8);
     widget.addSpacer();
     return widget;
@@ -502,7 +555,7 @@ function makeLockScreenWidget(data, group, now, error, family) {
   if (usable && !data.emergency) {
     // The six-hour window advances on the hour even when the scheduled state is unchanged.
     widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), (Math.floor(now / 3600000) + 1) * 3600000));
-    addLockScreenSchedule(widget, data, group, p, checked, ink);
+    addLockScreenSchedule(widget, data, group, p, checked, ink, now);
     return widget;
   }
   addText(widget, `Чернівці · ${group}`, 10, ink);
@@ -516,6 +569,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   if (["accessoryRectangular", "accessoryInline", "accessoryCircular"].includes(config.widgetFamily)) {
     return makeLockScreenWidget(data, group, now, error, config.widgetFamily);
   }
+  if (data) data = scheduleQuality(data);
   const host = new ListWidget();
   const widget = host.addStack();
   widget.layoutVertically();
@@ -545,7 +599,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   host.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
   const p = kyivParts(now);
   const usable = data && data.date === p.date && !error;
-  const view = usable && !data.emergency ? eventView(data.cells, p.slot) : null;
+  const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextDayCells(data)) : null;
   const header = widget.addStack();
   header.topAlignContent();
   addText(header, "Чернівці", 14, ink, true);

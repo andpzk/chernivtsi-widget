@@ -11,3 +11,4 @@ jobs:
       - run: node tests/updater.cjs
       - run: node tests/appearance.cjs
       - run: node tests/lock-screen.cjs
+      - run: node tests/tomorrow.cjs
