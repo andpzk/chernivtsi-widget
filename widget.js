@@ -507,7 +507,6 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   content.size = new Size(width, 0);
   frame.addSpacer();
   const event = content.addStack();
-  event.size = new Size(width, 34);
   event.centerAlignContent();
   const iconFrame = event.addStack();
   iconFrame.size = new Size(16, 0);
@@ -531,8 +530,9 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   const notices = checked.split(" · ").slice(1);
   if (!symbol && target) notices.unshift(target.state === "on" ? "Заживлення" : "Відключення");
   if (target && !target.endTime) notices.push("кінець невідомий");
+  event.size = new Size(width, notices.length ? 22 : 26);
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
-  content.addSpacer(notices.length ? 2 : 8);
+  content.addSpacer(notices.length ? 2 : 4);
   const strip = content.addImage(lockScreenStrip(model, width));
   strip.imageSize = new Size(width,14);
   strip.tintColor = ink;
@@ -542,7 +542,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
     const cell = axis.addStack();
     cell.size = new Size(width / 3, 0);
     if (index) cell.addSpacer();
-    addText(cell, lockScreenAxis(minute), 8, ink);
+    addText(cell, lockScreenAxis(minute), 12, ink);
     if (index !== 2) cell.addSpacer();
   });
 }
@@ -588,6 +588,8 @@ function makeLockScreenWidget(data, group, now, error, family) {
     return widget;
   }
   if (usable && !data.emergency) {
+    // Lift the ruler toward adjacent circular-widget labels; keep room for quality warnings.
+    widget.setPadding(2, 3, 10, 3);
     // The six-hour window advances on the hour even when the scheduled state is unchanged.
     widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), (Math.floor(now / 3600000) + 1) * 3600000));
     addLockScreenSchedule(widget, data, p, checked, ink, now);
