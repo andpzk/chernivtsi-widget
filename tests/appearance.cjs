@@ -59,15 +59,26 @@ async function render(width, state = 'off', group = '12', family = 'medium') {
   assert.ok(host.refreshAfterDate instanceof Date);
   assert.match(host.url,/scriptable:\/\/\/run\?/);
   if(family.startsWith('accessory')) {
-    assert.equal(drawings.length,0,'Lock Screen must not render the full-size glass or timeline');
+    assert.equal(drawings.length,family==='accessoryRectangular'?1:0,'Only the rectangular accessory draws a compact strip');
     assert.equal(host.backgroundGradient,undefined);
     assert.ok(texts.some(t=>t.text.includes('12')));
     if(family==='accessoryInline')assert.equal(texts.length,1);
     if(family==='accessoryCircular')assert.equal(host.addAccessoryWidgetBackground,true);
     if(family==='accessoryRectangular') {
-      assert.ok(texts.some(t=>t.text==='Без світла'));
-      assert.ok(texts.some(t=>t.text==='Можливе заживлення з 21:00'));
-      assert.ok(texts.some(t=>t.text==='↻ 19:01 · кеш'));
+      assert.ok(texts.some(t=>t.text==='12 · Без світла'));
+      assert.ok(texts.some(t=>t.text==='Можливе заживлення'));
+      assert.ok(texts.some(t=>t.text==='21:00'));
+      assert.ok(texts.some(t=>t.text==='↻ 19:01'));
+      assert.ok(texts.some(t=>t.text==='кеш'));
+      assert.deepEqual({...drawings[0].size},{width:150,height:14});
+      assert.equal(drawings[0].respectScreenScale,true);
+      assert.equal(drawings[0].opaque,false);
+      assert.equal(images[0].tintColor.hex,'FFFFFF');
+      assert.deepEqual({...images[0].imageSize},{width:150,height:14});
+      for(const op of drawings[0].ops) {
+        assert.equal(op.color.hex,'FFFFFF','Monochrome strip must not bake in Home Screen colors');
+        if(op.rect)assert.ok(Object.values(op.rect).every(Number.isFinite));
+      }
     }
     return;
   }

@@ -372,6 +372,94 @@ function glassReflections(width, height) {
   return ctx.getImage();
 }
 
+function lockScreenSchedule(cells, time) {
+  const [hour, minute] = time.split(":").map(Number);
+  const now = hour * 60 + minute, start = hour * 60 - 60, end = start + 360;
+  const ranges = periods(cells).map(p => ({...p, start:p.start * 30, end:p.end * 30}));
+  const current = ranges.find(p => p.start <= now && p.end > now);
+  const next = current && current.state !== "unknown" ? ranges.find(p => p.start === current.end) : null;
+  const coverage = [{start:-60,end:0,state:"unknown"}, ...ranges, {start:1440,end:1800,state:"unknown"}];
+  const segments = coverage.filter(p => p.end > start && p.start < end)
+    .map(p => ({state:p.state, start:Math.max(start,p.start), end:Math.min(end,p.end)}));
+  return {now, start, end, current, next, segments, marker:(now - start) / 360};
+}
+
+function lockScreenAxis(minute) {
+  const hour = (Math.floor(minute / 60) + 24) % 24;
+  const label = displayTimes(`${String(hour).padStart(2,"0")}:00`).match(/\p{Number}+/u)?.[0] || String(hour);
+  return label + (minute < 0 ? " −1" : minute >= 1440 ? " +1" : "");
+}
+
+function lockScreenStrip(model, width) {
+  const ctx = new DrawContext();
+  ctx.size = new Size(width, 14);
+  ctx.opaque = false;
+  ctx.respectScreenScale = true;
+  // Alpha and patterns survive monochrome tint; all geometry shares the same time scale.
+  for (let x = 0; x < width; x += 0.5) {
+    const minute = model.start + (x + 0.25) / width * 360;
+    const state = model.segments.find(p => p.start <= minute && p.end > minute).state;
+    const edge = Math.min(x + 0.25, width - x - 0.25, 3.5);
+    const inset = 3.5 - Math.sqrt(Math.max(0, 3.5 ** 2 - (edge - 3.5) ** 2));
+    ctx.setFillColor(new Color("FFFFFF", {on:0.9,off:0.25,possible:0.8,unknown:0.35}[state]));
+    if (state === "on" || state === "off") ctx.fillRect(new Rect(x, 4 + inset, 0.5, 7 - inset * 2));
+    else for (let y = 0; y < 7; y++) {
+      const top = Math.max(y,inset), bottom = Math.min(y + 1,7 - inset);
+      const visible = state === "possible" ? (x + y * 0.5) % 3 < 1 : x % 4 < 1 && y >= 2 && y < 5;
+      if (visible && bottom > top) ctx.fillRect(new Rect(x, 4 + top, 0.5, bottom - top));
+    }
+  }
+  const marker = model.marker * width;
+  ctx.setFillColor(new Color("FFFFFF"));
+  ctx.fillRect(new Rect(marker - 0.75, 1, 1.5, 13));
+  ctx.fillEllipse(new Rect(marker - 1.5, 0, 3, 3));
+  return ctx.getImage();
+}
+
+function addLockScreenSchedule(widget, data, group, p, checked, ink) {
+  const model = lockScreenSchedule(data.cells, p.time), next = model.next;
+  const frame = widget.addStack();
+  frame.addSpacer();
+  const content = frame.addStack();
+  content.layoutVertically();
+  // shortcut: 150pt fits the compact accessory; recalibrate if native device evidence shows clipping.
+  const width = 150;
+  content.size = new Size(width, 0);
+  frame.addSpacer();
+  const header = content.addStack();
+  const status = {on:"Є світло",off:"Без світла",possible:"Можливе світло",unknown:"Немає даних"}[model.current.state];
+  addText(header, `${group} · ${status}`, 8.5, ink);
+  header.addSpacer();
+  const [checkedTime, ...notices] = checked.split(" · ");
+  addText(header, checkedTime, 7.5, ink);
+  const event = content.addStack();
+  event.centerAlignContent();
+  addText(event, next ? clock(next.start / 30) : "—", 20, ink, true);
+  event.addSpacer();
+  // Data-quality notices take the countdown's space; never hide them to fit the accessory.
+  if (notices.length) addText(event, notices.join(" · "), 7.5, ink);
+  else if (next) {
+    const left = next.start - model.now;
+    const duration = left >= 60 ? `${Math.floor(left / 60)} год${left % 60 ? ` ${left % 60} хв` : ""}` : `${left} хв`;
+    addText(event, `ще ${duration}`, 8, ink);
+  }
+  const label = next ? {on:"Планове заживлення",off:"Відключення",possible:"Можливе заживлення",unknown:"Немає даних з"}[next.state] : "Далі графіка немає";
+  addText(content, label, 10, ink);
+  content.addSpacer(1);
+  const strip = content.addImage(lockScreenStrip(model, width));
+  strip.imageSize = new Size(width,14);
+  strip.tintColor = ink;
+  strip.applyFittingContentMode();
+  const axis = content.addStack();
+  [model.start, model.start + 180, model.end].forEach((minute,index) => {
+    const cell = axis.addStack();
+    cell.size = new Size(width / 3, 0);
+    if (index) cell.addSpacer();
+    addText(cell, lockScreenAxis(minute), 8, ink);
+    if (index !== 2) cell.addSpacer();
+  });
+}
+
 function makeLockScreenWidget(data, group, now, error, family) {
   const widget = new ListWidget();
   const ink = new Color("FFFFFF");
@@ -409,6 +497,12 @@ function makeLockScreenWidget(data, group, now, error, family) {
     line(nextTime || "—", 14, true);
     line(`${group}${data && data.cached ? " · кеш" : " група"}`, 8);
     widget.addSpacer();
+    return widget;
+  }
+  if (usable && !data.emergency) {
+    // The six-hour window advances on the hour even when the scheduled state is unchanged.
+    widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), (Math.floor(now / 3600000) + 1) * 3600000));
+    addLockScreenSchedule(widget, data, group, p, checked, ink);
     return widget;
   }
   addText(widget, `Чернівці · ${group}`, 10, ink);
