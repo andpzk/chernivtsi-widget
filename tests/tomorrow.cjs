@@ -16,7 +16,8 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
     FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>!!cache,readString:()=>JSON.stringify(cache),writeString:(p,s)=>writes.push(JSON.parse(s))})},
     SFSymbol:{named:name=>({image:{symbol:name}})},ListWidget:Container,Color:class{},Font:{systemFont(){},semiboldSystemFont(){}},Script:{name:()=> 'Світло'},
     Size:class{constructor(width,height){Object.assign(this,{width,height});}},Rect:class{},
-    DrawContext:class{setFillColor(){}fillRect(){}fillEllipse(){}getImage(){return {}; }},
+    DrawContext:class{setFillColor(){}fillRect(){}fillEllipse(){}addPath(){}fillPath(){}getImage(){return {}; }},
+    Point:class{},Path:class{move(){}addLine(){}closeSubpath(){}},
     DateFormatter:class{useNoDateStyle(){}useShortTimeStyle(){}string(d){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}}
   });
   vm.runInContext(source,ctx);return {ctx,requests,writes,texts};

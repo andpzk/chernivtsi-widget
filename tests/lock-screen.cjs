@@ -17,12 +17,16 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
     setFillColor(color){this.color=color;}
     fillRect(rect){this.ops.push({rect,color:this.color});}
     fillEllipse(rect){this.ops.push({rect,color:this.color,ellipse:true});}
+    addPath(path){this.path=path;}
+    fillPath(){this.ops.push({points:this.path.points,color:this.color});}
     getImage(){return {size:this.size,ops:this.ops};}
   }
   const ctx=vm.createContext({Intl,Date,module:{exports:{}},ListWidget:Widget,DrawContext,
     Color:class{constructor(hex,alpha=1){Object.assign(this,{hex,alpha});}},
     Size:class{constructor(width,height){Object.assign(this,{width,height});}},
     Rect:class{constructor(x,y,width,height){Object.assign(this,{x,y,width,height});}},
+    Point:class{constructor(x,y){Object.assign(this,{x,y});}},
+    Path:class{constructor(){this.points=[];}move(p){this.points.push(p);}addLine(p){this.points.push(p);}closeSubpath(){}},
     SFSymbol:{named:name=>missingSymbol?null:{image:{symbol:name}}},
     Font:{systemFont:size=>({size}),semiboldSystemFont:size=>({size})},Script:{name:()=> 'Світло'},
     DateFormatter:class{useNoDateStyle(){}useShortTimeStyle(){}string(date){return new Intl.DateTimeFormat('en-US',{hour:hour12?'numeric':'2-digit',minute:'2-digit',hourCycle:hour12?'h12':'h23'}).format(date);}}
@@ -160,8 +164,30 @@ for(const time of ['00:00','19:01','21:01','23:59']) {
   const result=render({time}),drawing=result.drawings[0];
   assert.equal(drawing.respectScreenScale,true);assert.equal(drawing.opaque,false);
   assert.ok(drawing.ops.length<2500);
-  for(const op of drawing.ops){assert.equal(op.color.hex,'FFFFFF');assert.ok(Object.values(op.rect).every(Number.isFinite));assert.ok(op.rect.x>=0&&op.rect.x+op.rect.width<=150);assert.ok(op.rect.y>=0&&op.rect.y+op.rect.height<=14);}
+  for(const op of drawing.ops){
+    assert.equal(op.color.hex,'FFFFFF');
+    if(op.rect){assert.ok(Object.values(op.rect).every(Number.isFinite));assert.ok(op.rect.x>=0&&op.rect.x+op.rect.width<=150);assert.ok(op.rect.y>=0&&op.rect.y+op.rect.height<=14);}
+    else for(const p of op.points){assert.ok(Number.isFinite(p.x)&&Number.isFinite(p.y));assert.ok(p.x>=0&&p.x<=150&&p.y>=4&&p.y<=11);}
+  }
   const model=result.ctx.lockScreenSchedule(result.cells,time),pin=drawing.ops.at(-2).rect;
   assert.ok(Math.abs(pin.x+pin.width/2-model.marker*150)<1e-8);
 }
+for(const state of ['on','off']) {
+  const model=ctx.lockScreenSchedule(Array(48).fill(state),'12:30');
+  const solid=ctx.lockScreenStrip(model,150);
+  assert.equal(solid.ops.length,3,'One continuous solid fill plus the two marker shapes');
+  assert.equal(solid.ops[0].color.alpha,state==='on'?0.9:0.25);
+  assert.equal(Math.min(...solid.ops[0].points.map(p=>p.x)),0);
+  assert.equal(Math.max(...solid.ops[0].points.map(p=>p.x)),150);
+}
+const mixed=ctx.lockScreenSchedule(cells,'19:01');
+const fills=ctx.lockScreenStrip(mixed,150).ops.filter(op=>op.color.alpha===0.9||op.color.alpha===0.25);
+const spans=mixed.segments.filter(p=>p.state==='on'||p.state==='off');
+assert.equal(fills.length,spans.length,'Each solid schedule segment is painted once');
+fills.forEach((op,i)=>{
+  const left=op.rect?.x??Math.min(...op.points.map(p=>p.x));
+  const right=op.rect?op.rect.x+op.rect.width:Math.max(...op.points.map(p=>p.x));
+  assert.ok(Math.abs(left-(spans[i].start-mixed.start)/360*150)<1e-8);
+  assert.ok(Math.abs(right-(spans[i].end-mixed.start)/360*150)<1e-8);
+});
 console.log('PASS: Schedule strip coverage/marker for all 1440 minutes, midnight, exact transitions, unknown/emergency states, cached/source notices, 12/24-hour labels, native drawing geometry and other accessory families.');
