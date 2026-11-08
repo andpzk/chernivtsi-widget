@@ -665,12 +665,13 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     widget.cornerRadius = 26;
     widget.backgroundImage = glassReflections(surfaceWidth, surfaceHeight);
   }
-  widget.setPadding(12, 16, 16, 16);
   host.refreshAfterDate = new Date(nextRefreshAt(error ? null : data, now));
   host.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
   const p = kyivParts(now);
   const usable = data && data.date === p.date && !error;
   const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextDayCells(data)) : null;
+  const clearMessage = view && view.clearToday && !/^\d{2}:\d{2}$/.test(view.value);
+  widget.setPadding(clearMessage ? 16 : 12, 16, 16, 16);
   const header = widget.addStack();
   header.topAlignContent();
   addText(header, "Чернівці", 14, ink, true);
@@ -694,8 +695,8 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   addText(metadata, `${group} група`, 10, muted);
   metadata.addSpacer();
   if (view) addCheckedTime(metadata, data.checkedAt, muted);
-  widget.addSpacer(2);
-  if (view) widget.addSpacer();
+  widget.addSpacer(clearMessage ? 8 : 2);
+  if (view && !clearMessage) widget.addSpacer();
   if (!usable) {
     widget.addSpacer();
     addText(widget, error || "Немає графіка на сьогодні", 19, ink, true);
@@ -721,11 +722,12 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     title.addSpacer();
     addText(title, view.headline, 11, muted);
     title.addSpacer();
+    if (clearMessage) widget.addSpacer(4);
     const main = widget.addStack();
     main.centerAlignContent();
     main.addSpacer();
     const timeSize = notices.length ? 29 : 36;
-    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : 22, ink, true);
+    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : clearMessage ? 26 : 22, ink, true);
     if (/^\d{2}:\d{2}$/.test(view.detail)) {
       main.addSpacer(8);
       addText(main, "—", 22, muted);

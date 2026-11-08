@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../widget.js'), 'utf8');
 
-async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false) {
+async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false, clearEvening = false) {
   const images = [], texts = [], drawings = [];
   class Container {
     constructor(){this.children=[];}
@@ -42,6 +42,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   class FixedDate extends Date {static now(){return Date.parse(tomorrow?'2026-11-07T21:40:00Z':'2026-11-07T17:01:00Z');}}
   const cache={date:'2026-11-07',group:12,source:'official',emergency:false,checkedAt:FixedDate.now(),sourceAt:FixedDate.now(),cells:Array(48).fill('on')};
   cache.cells.fill(state,38,42);cache.cells.fill('possible',42,43);
+  if(clearEvening)cache.cells.fill('on',38);
   if(tomorrow){cache.tomorrow={...cache,date:'2026-11-08',cells:Array(48).fill('on')};cache.tomorrow.cells.fill('off',0,2);cache.tomorrow.cells.fill('possible',2,3);}
   const ctx=vm.createContext({console:{log(){}},Intl,Date:FixedDate,module:{exports:{}},ListWidget,DrawContext,Path:Shape,Color,
     Size:class {constructor(width,height){Object.assign(this,{width,height});}},
@@ -85,7 +86,12 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   assert.equal(host.padding.join(','),'0,0,0,0');
   const surface=host.children[0],expectedWidth=Number.isFinite(width)&&width>=300&&width<=500?width:378;
   assert.equal(surface.size.width,expectedWidth);
-  assert.equal(surface.padding.join(','),'12,16,16,16');
+  assert.equal(surface.padding.join(','),clearEvening?'16,16,16,16':'12,16,16,16');
+  if(clearEvening){
+    assert.equal(texts.find(t=>t.text==='Без відключень').font.size,26);
+    assert.equal(texts.find(t=>t.text==='До кінця дня').font.size,11);
+    assert.equal(texts.find(t=>t.text==='Чернівці').font.size,14);
+  }
   assert.ok(surface.vertical);
   assert.equal(surface.backgroundImage.size.width,expectedWidth);
   assert.equal(surface.backgroundImage.opaque,false);
@@ -116,13 +122,14 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     if(state==='off'&&!tomorrow)assert.ok(texts.some(t=>t.text==='Відключення триває'));
     if(tomorrow){assert.ok(texts.some(t=>t.text==='Наступне відключення · завтра'));assert.ok(texts.some(t=>t.text==='00:00'));assert.ok(texts.some(t=>t.text==='01:00'));assert.ok(texts.some(t=>t.text.includes('завтра · можливе заживлення')));}
     const colors=drawings.flatMap(d=>d.ops.map(op=>op.color?.hex));
-    assert.ok(colors.includes('72C69B')&&colors.includes('CFB879'));
+    assert.ok(colors.includes('72C69B')&&(clearEvening||colors.includes('CFB879')));
     if(state==='off')assert.ok(colors.includes('DC8587'));
   } else assert.ok(texts.some(t=>t.text==='Вкажіть групу від 1 до 12'));
 }
 (async()=>{
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
   for(const state of ['on','possible','unknown'])await render(378,state);
+  for(const width of [338,378,382])await render(width,'on','12','medium',false,false,true);
   for(const state of ['on','off','possible','unknown'])await render(378,state,'12','medium',false,true);
   await render(378,'off','invalid');
   await render(378,'off','12','medium',true);
