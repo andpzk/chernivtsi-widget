@@ -94,12 +94,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     assert.equal(texts.find(t=>t.text==='До кінця дня').font.size,11);
     assert.equal(texts.find(t=>t.text==='Чернівці').font.size,14);
   }
-  if(warnings){
-    const notice=texts.find(t=>t.text.includes('\u0414\u0410\u0412\u041d\u0406 \u0414\u0410\u041d\u0406'));
-    assert.ok(!texts.some(t=>t.text.includes('\u0420\u0435\u0437\u0435\u0440\u0432:')));
-    assert.equal(notice.lineLimit,2);
-  }
-  assert.ok(!texts.some(t=>t.text.includes('\u0417\u0411\u0415\u0420\u0415\u0416\u0415\u041d\u041e')),'Hide the cache label while retaining stale/source warnings');
+  assert.ok(!texts.some(t=>/\u0434\u0430\u0432\u043d\u0456|\u0414\u0410\u0412\u041d\u0406|\u0417\u0411\u0415\u0420\u0415\u0416\u0415\u041d\u041e|\u0420\u0435\u0437\u0435\u0440\u0432:/.test(t.text)),'Technical cache/source-age labels stay hidden');
   assert.ok(surface.vertical);
   assert.equal(surface.backgroundImage.size.width,expectedWidth);
   assert.equal(surface.backgroundImage.opaque,false);

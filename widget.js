@@ -596,8 +596,7 @@ function makeLockScreenWidget(data, group, now, error, family) {
       detail = `${{on:"Заживлення з", off:"Відключення о", possible:"Можливе заживлення з", unknown:"Немає даних з"}[next.state]} ${nextTime}`;
     } else if (state === "on") detail = "За графіком до кінця доби";
   }
-  const stale = usable && now - data.sourceAt > 7200000;
-  const checked = usable ? `↻ ${kyivParts(data.checkedAt).time}${stale ? " · давні" : ""}` : "";
+  const checked = usable ? `↻ ${kyivParts(data.checkedAt).time}` : "";
   if (family === "accessoryInline") {
     // Inline accessories accept a single text element; keep all essential meaning in it.
     addText(widget, `${group} · ${status}${nextTime ? ` · зміна ${nextTime}` : ""}`, 12, ink);
@@ -722,9 +721,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     addText(widget, data ? `Останні дані: ${data.date}` : "Успішного оновлення ще не було", 11, muted);
     return host;
   }
-  const stale = now - data.sourceAt > 7200000;
   const notices = [];
-  if (stale) notices.push("ДАВНІ ДАНІ");
   if (data.emergency) {
     widget.addSpacer();
     addText(widget, "Аварійні відключення", 20, red, true);
