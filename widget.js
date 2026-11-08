@@ -148,38 +148,53 @@ async function getSchedule(group, now) {
       }
     }
   } catch (e) { console.log(`Cache read: ${e.message}`); }
-  let data;
+  let data, mainTomorrow;
+  const today = kyivParts(now).date;
   const [todayPage, tomorrowPage] = await Promise.allSettled([download(OFFICIAL_URL), download(`${OFFICIAL_URL}?next`)]);
   try {
     if (todayPage.status === "rejected") throw todayPage.reason;
     data = parseOfficial(todayPage.value, group, now);
   } catch (e) {
     console.log(`Official source: ${e.message}`);
+    if (todayPage.status === "fulfilled") {
+      try { mainTomorrow = parseOfficial(todayPage.value, group, now, shiftDate(today, 1)); }
+      catch (_) {} // A malformed or unrelated date must not become tomorrow's schedule.
+    }
     // A known emergency must never be overwritten by a binary community schedule.
     if (cached && cached.emergency && cached.date === kyivParts(now).date) {
       return {...cached, cached: true};
     }
-    try { data = parseFallback(JSON.parse(await download(FALLBACK_URL)), group, now); }
+    if (mainTomorrow && cached && cached.date === today && cached.source === "official") {
+      data = {...cached, cached:true};
+    } else try { data = parseFallback(JSON.parse(await download(FALLBACK_URL)), group, now); }
     catch (fallbackError) {
       console.log(`Community source: ${fallbackError.message}`);
       data = cached ? {...cached, cached: true} : null;
     }
   }
+  if (mainTomorrow && (!data || data.date !== today)) {
+    // Preserve the published future without inventing today's power status.
+    data = {date:today, source:"official", sourceAt:now, emergency:false, cells:Array(48).fill("unknown")};
+  }
   if (!data) return null;
   if (!data.cached) data = {...data, group, checkedAt: Date.now()};
   // Replace optional future data on every successful read; never retain a withdrawn schedule.
   if (!data.emergency && data.date === kyivParts(now).date) {
-    if (tomorrowPage.status === "fulfilled") {
+    if (mainTomorrow || tomorrowPage.status === "fulfilled") {
       delete data.tomorrow;
-      try {
-        const tomorrow = parseOfficial(tomorrowPage.value, group, now, shiftDate(data.date, 1));
-        if (!tomorrow.emergency) data.tomorrow = {...tomorrow, checkedAt:Date.now()};
-      } catch (e) { console.log(`Tomorrow schedule: ${e.message}`); }
+      let tomorrow = mainTomorrow;
+      if (tomorrowPage.status === "fulfilled") {
+        try {
+          const next = parseOfficial(tomorrowPage.value, group, now, shiftDate(today, 1));
+          if (!tomorrow || next.sourceAt >= tomorrow.sourceAt) tomorrow = next;
+        } catch (e) { console.log(`Tomorrow schedule: ${e.message}`); }
+      }
+      if (tomorrow && !tomorrow.emergency) data.tomorrow = {...tomorrow, checkedAt:Date.now()};
     } else if (cached && cached.date === data.date && cached.tomorrow) {
       data.tomorrow = {...cached.tomorrow, cached:true};
     }
   }
-  try { if (!data.cached || tomorrowPage.status === "fulfilled") fm.writeString(path, JSON.stringify(data)); }
+  try { if (!data.cached || mainTomorrow || tomorrowPage.status === "fulfilled") fm.writeString(path, JSON.stringify(data)); }
   catch (e) { console.log(`Cache write: ${e.message}`); }
   return data;
 }

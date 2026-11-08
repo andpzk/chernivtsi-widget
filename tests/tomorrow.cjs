@@ -46,6 +46,28 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
     const run=setup({tomorrow:missing});const result=await run.ctx.getSchedule(12,captured);
     assert.equal(result.date,'2026-11-07');assert.equal(result.tomorrow,undefined,'Missing/bad future data must not discard today or become a forecast');
   }
+  for(const next of [null,'<html>Not published</html>',tomorrowHtml]) {
+    const early=setup({today:tomorrowHtml,tomorrow:next,cache:data});
+    const result=await early.ctx.getSchedule(12,captured);
+    assert.equal(result.date,'2026-11-07');
+    assert.ok(result.cached);
+    assert.equal(result.source,'official');
+    assert.deepEqual([...result.cells],[...data.cells]);
+    assert.equal(result.checkedAt,data.checkedAt);
+    assert.equal(result.tomorrow.date,'2026-11-08');
+    assert.ok(!result.tomorrow.cached);
+    assert.ok(!early.requests.some(url=>url.includes('raw.githubusercontent')),'Date rollover must not replace saved official data with a binary fallback');
+    assert.equal(early.writes.length,1,'Save newly published tomorrow even when today is cached');
+  }
+  const first=setup({today:tomorrowHtml,tomorrow:null});
+  const futureOnly=await first.ctx.getSchedule(12,captured);
+  assert.ok(futureOnly.cells.every(s=>s==='unknown'));
+  assert.equal(futureOnly.tomorrow.date,'2026-11-08');
+  const nextMorning=ctx.kyivTimestamp('2026-11-08','00:05');
+  const futureRollover=setup({now:nextMorning,today:null,tomorrow:null,cache:futureOnly});
+  const promoted=await futureRollover.ctx.getSchedule(12,nextMorning);
+  assert.deepEqual([...promoted.cells],[...futureOnly.tomorrow.cells]);
+  assert.ok(promoted.cached);
   const offline=setup({today:null,tomorrow:null,cache:data});
   const saved=await offline.ctx.getSchedule(12,captured);
   assert.ok(saved.cached&&saved.tomorrow.cached);assert.equal(saved.tomorrow.date,'2026-11-08');
