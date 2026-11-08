@@ -531,6 +531,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
     message.layoutVertically();
     addText(message, "Без відключень", 12, ink, true);
     addText(message, "до кінця дня", 9, ink);
+    event.addSpacer();
   } else {
     addText(event, "Час невідомий", 12, ink);
   }

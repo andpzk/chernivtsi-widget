@@ -1,12 +1,13 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../widget.js'),'utf8');
 function render({time='19:01',hour12=false,kind='normal',family='accessoryRectangular',cached=false,sourceName='official',error='',missingSymbol=false}={}) {
-  const texts=[],images=[],drawings=[],textNodes=[];
+  const texts=[],images=[],drawings=[],textNodes=[],containers=[];
   class Widget {
-    addText(text){texts.push(text);const node={text,centerAlignText(){}};textNodes.push(node);return node;}
-    addSpacer(){}
+    constructor(){this.children=[];containers.push(this);}
+    addText(text){texts.push(text);const node={text,centerAlignText(){}};textNodes.push(node);this.children.push(node);return node;}
+    addSpacer(length){this.children.push({spacer:length});}
     setPadding(){}
-    addStack(){return new Widget();}
+    addStack(){const child=new Widget();this.children.push(child);return child;}
     layoutVertically(){}
     centerAlignContent(){}
     addImage(image){const node={image,applyFittingContentMode(){}};images.push(node);return node;}
@@ -45,7 +46,7 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   const widget=ctx.makeLockScreenWidget(kind==='empty'?null:data,12,now,error,family);
   assert.ok(widget.refreshAfterDate.getTime()>now);
   assert.match(widget.url,/group=12$/);
-  return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,data,images,drawings,textNodes};
+  return {texts,refresh:widget.refreshAfterDate.getTime(),now,ctx,cells,data,images,drawings,textNodes,containers};
 }
 const clipped=render({time:'00:20',hour12:true,kind:'screenshot'});
 const completeTimes=clipped.textNodes.filter(t=>t.text.includes(':'));
@@ -96,6 +97,9 @@ for(const time of ['19:01','23:59']) {
   assert.equal(clear.images[0].image.symbol,'bolt');
   assert.equal(clear.drawings.length,1,'Keep the schedule strip');
   assert.ok(!clear.texts.includes('Час невідомий'));
+  const event=clear.containers.find(c=>c.size?.width===150&&c.children.some(child=>child.children?.some(t=>t.text==='Без відключень')));
+  assert.equal(event.children[0].size.width,16,'Icon starts the same-width row as the strip');
+  assert.deepEqual(event.children.at(-1),{spacer:undefined},'Trailing flexible space must anchor the short message to the left');
   const home=clear.ctx.eventView(clear.cells,clear.ctx.kyivParts(clear.now).slot);
   assert.equal(home.value,'Без відключень');
   assert.equal(home.headline,'До кінця дня');
