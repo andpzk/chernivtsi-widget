@@ -96,7 +96,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   }
   if(warnings){
     const notice=texts.find(t=>t.text.includes('\u0414\u0410\u0412\u041d\u0406 \u0414\u0410\u041d\u0406'));
-    assert.ok(notice.text.includes('\u0420\u0435\u0437\u0435\u0440\u0432:'));
+    assert.ok(!texts.some(t=>t.text.includes('\u0420\u0435\u0437\u0435\u0440\u0432:')));
     assert.equal(notice.lineLimit,2);
   }
   assert.ok(!texts.some(t=>t.text.includes('\u0417\u0411\u0415\u0420\u0415\u0416\u0415\u041d\u041e')),'Hide the cache label while retaining stale/source warnings');
