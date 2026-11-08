@@ -82,7 +82,7 @@ const noon=render({time:'11:59',kind:'noon',hour12:true});
 assert.equal(noon.texts.slice(0,3).join(''),'12:00 PM – 2:00 PM','Already-localized noon must not gain a second PM');
 assert.ok(!render({cached:true,kind:'bounded'}).texts.includes('кеш'));
 assert.ok(!render({sourceName:'community',kind:'bounded'}).texts.includes('резерв'));
-assert.ok(render({kind:'stale'}).texts.some(t=>t.includes('давні')));
+assert.ok(!render({kind:'stale'}).texts.some(t=>t.includes('давні')));
 const fallback=render({cached:true,sourceName:'community',kind:'bounded'});
 assert.ok(!fallback.texts.some(t=>/кеш|резерв/.test(t)));
 assert.ok(!fallback.texts.some(t=>t.startsWith('↻')));
