@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../widget.js'), 'utf8');
 
-async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false, clearEvening = false) {
+async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false, clearEvening = false, design = {}) {
   const images = [], texts = [], drawings = [];
   class Container {
     constructor(){this.children=[];}
@@ -56,6 +56,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>true,readString:()=>JSON.stringify(cache),writeString(){}})}
   });
   vm.runInContext(source,ctx);
+  vm.runInContext(`Object.assign(DESIGN, ${JSON.stringify(design)})`,ctx);
   const host=await ctx.module.exports.build({widgetWidth:width});
   assert.ok(host instanceof ListWidget,'Updater must receive the actual ListWidget, not its content stack');
   assert.ok(host.refreshAfterDate instanceof Date);
@@ -86,9 +87,9 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   assert.equal(host.padding.join(','),'0,0,0,0');
   const surface=host.children[0],expectedWidth=Number.isFinite(width)&&width>=300&&width<=500?width:378;
   assert.equal(surface.size.width,expectedWidth);
-  assert.equal(surface.padding.join(','),clearEvening?'16,16,16,16':'12,16,16,16');
+  assert.equal(surface.padding.join(','),`${(design.padding??12)+(clearEvening?4:0)},16,${(design.padding??12)+4},16`);
   if(clearEvening){
-    assert.equal(texts.find(t=>t.text==='Без відключень').font.size,26);
+    assert.equal(texts.find(t=>t.text==='Без відключень').font.size,design.messageFont??26);
     assert.equal(texts.find(t=>t.text==='До кінця дня').font.size,11);
     assert.equal(texts.find(t=>t.text==='Чернівці').font.size,14);
   }
@@ -128,6 +129,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
 }
 (async()=>{
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
+  await render(378,'on','12','medium',false,false,true,{messageFont:28,padding:14});
   for(const state of ['on','possible','unknown'])await render(378,state);
   for(const width of [338,378,382])await render(width,'on','12','medium',false,false,true);
   for(const state of ['on','off','possible','unknown'])await render(378,state,'12','medium',false,true);

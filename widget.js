@@ -3,6 +3,7 @@
 // Widget Parameter can override the group with a number from 1 to 12.
 const DEFAULT_GROUP = 12;
 const GLASS_STYLE = true;
+const DESIGN = {"mainFont": 36, "messageFont": 26, "axisFont": 12, "barHeight": 12, "padding": 12, "headerGap": 2, "chartGap": 2};
 const OFFICIAL_URL = "https://oblenergo.cv.ua/shutdowns/";
 const FALLBACK_URL = "https://raw.githubusercontent.com/chaichuk/UA-power-outages-monitor/main/artifacts/chernivtsi.json";
 const REFRESH_MINUTES = 15;
@@ -220,7 +221,7 @@ function displayTimes(value) {
 function addText(container, value, size, color, bold = false) {
   let displayed = displayTimes(value);
   if (displayed.length > 30) displayed = displayed.replace(" · можливе світло", " · можливо");
-  if (size >= 29 && displayed.length > 5) size = Math.min(size, 31);
+  if (size >= Math.round(DESIGN.mainFont * 29 / 36) && /AM|PM/i.test(displayed)) size = Math.min(size, Math.round(DESIGN.mainFont * 31 / 36));
   if (size === 20 && displayed.length > 8) size = 16;
   const text = container.addText(displayed);
   text.font = bold ? Font.semiboldSystemFont(size) : Font.systemFont(size);
@@ -247,7 +248,7 @@ function timeline(cells, time) {
   // Keep the soft bar palette stable; only the separate marker changes with appearance.
   const colors = {on:"72C69B", off:"DC8587", possible:"CFB879", unknown:"707986"};
   const ctx = new DrawContext();
-  const barHeight = 12, inset = 4;
+  const barHeight = DESIGN.barHeight, inset = 4;
   ctx.size = new Size(600, barHeight + inset * 2);
   ctx.opaque = false;
   ctx.respectScreenScale = true;
@@ -671,7 +672,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const usable = data && data.date === p.date && !error;
   const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextDayCells(data)) : null;
   const clearMessage = view && view.clearToday && !/^\d{2}:\d{2}$/.test(view.value);
-  widget.setPadding(clearMessage ? 16 : 12, 16, 16, 16);
+  widget.setPadding(DESIGN.padding + (clearMessage ? 4 : 0), 16, DESIGN.padding + 4, 16);
   const header = widget.addStack();
   header.topAlignContent();
   addText(header, "Чернівці", 14, ink, true);
@@ -695,7 +696,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   addText(metadata, `${group} група`, 10, muted);
   metadata.addSpacer();
   if (view) addCheckedTime(metadata, data.checkedAt, muted);
-  widget.addSpacer(clearMessage ? 8 : 2);
+  widget.addSpacer(DESIGN.headerGap + (clearMessage ? 6 : 0));
   if (view && !clearMessage) widget.addSpacer();
   if (!usable) {
     widget.addSpacer();
@@ -726,8 +727,8 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     const main = widget.addStack();
     main.centerAlignContent();
     main.addSpacer();
-    const timeSize = notices.length ? 29 : 36;
-    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : clearMessage ? 26 : 22, ink, true);
+    const timeSize = notices.length ? Math.round(DESIGN.mainFont * 29 / 36) : DESIGN.mainFont;
+    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : clearMessage ? DESIGN.messageFont : 22, ink, true);
     if (/^\d{2}:\d{2}$/.test(view.detail)) {
       main.addSpacer(8);
       addText(main, "—", 22, muted);
@@ -742,7 +743,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
       addText(following, subtitle, 10, muted);
       following.addSpacer();
     }
-    const chartGap = 2;
+    const chartGap = DESIGN.chartGap;
     widget.addSpacer(notices.length ? Math.max(2, Math.round(chartGap / 2)) : chartGap);
     widget.addSpacer();
   }
@@ -765,7 +766,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     marker.applyFittingContentMode();
     const ticks = widget.addStack();
     ticks.size = new Size(displayWidth, 0);
-    const axisFont = 12;
+    const axisFont = DESIGN.axisFont;
     ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"].forEach((time, i) => {
       if (i) ticks.addSpacer();
       let label = displayTimes(time).replace(/[:.][0٠۰]{2}(?![0-9٠-٩۰-۹])/u, "");
