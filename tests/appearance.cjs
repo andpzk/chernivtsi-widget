@@ -128,9 +128,14 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     const labels=texts.filter(t=>t.font?.size===12).map(t=>t.text);
     assert.deepEqual(labels,format12?['12','3','6','9','12','3','6','9','12']:['00','03','06','09','12','15','18','21','24']);
     const ticks=surface.children.at(-1);
+    assert.deepEqual(ticks.padding,[0,0,0,0]);
     let x=0, index=0;
     for(const child of ticks.children){
       if(child.size){
+        assert.deepEqual(child.padding,[0,0,0,0],"Narrow hour cells must not inherit padding");
+        assert.equal(child.vertical,true);
+        assert.equal(child.children.length,1,"Hour text must not compete with horizontal spacers");
+        assert.equal(child.children[0].font.size,12);
         assert.ok(Math.abs(x+child.size.width/2-(expectedWidth-32)*(16+index*71)/600)<1e-8,'Native label center aligns with the drawn tick');
         x+=child.size.width;index++;
       }else x+=child.spacer;
