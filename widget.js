@@ -476,14 +476,40 @@ function lockScreenStrip(model, width) {
   ctx.opaque = false;
   ctx.respectScreenScale = true;
   // Alpha and patterns survive monochrome tint; all geometry shares the same time scale.
+  const insetAt = x => 3.5 - Math.sqrt(Math.max(0, 3.5 ** 2 - (Math.min(x, width - x, 3.5) - 3.5) ** 2));
+  for (const segment of model.segments) {
+    if (segment.state !== "on" && segment.state !== "off") continue;
+    const left = (segment.start - model.start) / 360 * width;
+    const right = (segment.end - model.start) / 360 * width;
+    ctx.setFillColor(new Color("FFFFFF", segment.state === "on" ? 0.9 : 0.25));
+    if (left >= 3.5 && right <= width - 3.5) {
+      ctx.fillRect(new Rect(left, 4, right - left, 7));
+      continue;
+    }
+    // Fill each solid span once; adjacent half-point rectangles leave seams on iPhone.
+    const xs = [left];
+    for (const start of [0, width - 3.5]) {
+      for (let i = 0; i <= 12; i++) {
+        const x = start + 3.5 * i / 12;
+        if (x > left && x < right) xs.push(x);
+      }
+    }
+    xs.push(right);
+    const path = new Path();
+    path.move(new Point(left, 4 + insetAt(left)));
+    for (const x of xs.slice(1)) path.addLine(new Point(x, 4 + insetAt(x)));
+    for (const x of xs.slice().reverse()) path.addLine(new Point(x, 11 - insetAt(x)));
+    path.closeSubpath();
+    ctx.addPath(path);
+    ctx.fillPath();
+  }
   for (let x = 0; x < width; x += 0.5) {
     const minute = model.start + (x + 0.25) / width * 360;
     const state = model.segments.find(p => p.start <= minute && p.end > minute).state;
-    const edge = Math.min(x + 0.25, width - x - 0.25, 3.5);
-    const inset = 3.5 - Math.sqrt(Math.max(0, 3.5 ** 2 - (edge - 3.5) ** 2));
-    ctx.setFillColor(new Color("FFFFFF", {on:0.9,off:0.25,possible:0.8,unknown:0.35}[state]));
-    if (state === "on" || state === "off") ctx.fillRect(new Rect(x, 4 + inset, 0.5, 7 - inset * 2));
-    else for (let y = 0; y < 7; y++) {
+    if (state === "on" || state === "off") continue;
+    const inset = insetAt(x + 0.25);
+    ctx.setFillColor(new Color("FFFFFF", state === "possible" ? 0.8 : 0.35));
+    for (let y = 0; y < 7; y++) {
       const top = Math.max(y,inset), bottom = Math.min(y + 1,7 - inset);
       const visible = state === "possible" ? (x + y * 0.5) % 3 < 1 : x % 4 < 1 && y >= 2 && y < 5;
       if (visible && bottom > top) ctx.fillRect(new Rect(x, 4 + top, 0.5, bottom - top));
