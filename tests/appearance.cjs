@@ -4,13 +4,13 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../widget.js'), 'utf8');
 
-async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false, clearEvening = false) {
+async function render(width, state = 'off', group = '12', family = 'medium', tomorrow = false, missingSymbol = false, clearEvening = false, screenWidth = null, format12 = false, warnings = false) {
   const images = [], texts = [], drawings = [];
   class Container {
     constructor(){this.children=[];}
     addStack(){const c=new Container();this.children.push(c);return c;}
     addText(text){const c={text,centerAlignText(){}};this.children.push(c);texts.push(c);return c;}
-    addSpacer(){}
+    addSpacer(length){this.children.push({spacer:length});}
     addImage(image){const c={image,applyFittingContentMode(){}};images.push(c);return c;}
     layoutVertically(){this.vertical=true;}
     setPadding(...padding){this.padding=padding;}
@@ -41,6 +41,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   class Color {constructor(hex,alpha=1){Object.assign(this,{hex,alpha});}static dynamic(light,dark){return {light,dark};}}
   class FixedDate extends Date {static now(){return Date.parse(tomorrow?'2026-11-07T21:40:00Z':'2026-11-07T17:01:00Z');}}
   const cache={date:'2026-11-07',group:12,source:'official',emergency:false,checkedAt:FixedDate.now(),sourceAt:FixedDate.now(),cells:Array(48).fill('on')};
+  if(warnings){cache.source='community';cache.sourceAt-=3*60*60*1000;}
   cache.cells.fill(state,38,42);cache.cells.fill('possible',42,43);
   if(clearEvening)cache.cells.fill('on',38);
   if(tomorrow){cache.tomorrow={...cache,date:'2026-11-08',cells:Array(48).fill('on')};cache.tomorrow.cells.fill('off',0,2);cache.tomorrow.cells.fill('possible',2,3);}
@@ -49,8 +50,8 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     Point:class {constructor(x,y){Object.assign(this,{x,y});}},
     Rect:class {constructor(x,y,width,height){Object.assign(this,{x,y,width,height});}},
     LinearGradient:class {},Font:{systemFont:size=>({size}),semiboldSystemFont:size=>({size})},
-    DateFormatter:class {useNoDateStyle(){}useShortTimeStyle(){}string(d){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}},
-    Device:{isUsingDarkAppearance(){throw Error('Unavailable in widgets');}},SFSymbol:{named:name=>missingSymbol?null:({image:{symbol:name}})},
+    DateFormatter:class {useNoDateStyle(){}useShortTimeStyle(){}string(d){return format12 ? `${d.getHours()%12||12}:${String(d.getMinutes()).padStart(2,'0')} ${d.getHours()<12?"AM":"PM"}` : `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}},
+    Device:{screenSize(){if(!screenWidth)throw Error("No screen API");return {width:screenWidth,height:956};},isUsingDarkAppearance(){throw Error('Unavailable in widgets');}},SFSymbol:{named:name=>missingSymbol?null:({image:{symbol:name}})},
     config:{runsInApp:false,runsInWidget:true,widgetFamily:family},args:{widgetParameter:group},Script:{name:()=> 'Чернівці Світло'},
     Request:class {async loadString(){throw Error('Offline test');}},
     FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>true,readString:()=>JSON.stringify(cache),writeString(){}})}
@@ -84,13 +85,19 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     return;
   }
   assert.equal(host.padding.join(','),'0,0,0,0');
-  const surface=host.children[0],expectedWidth=Number.isFinite(width)&&width>=300&&width<=500?width:378;
-  assert.equal(surface.size.width,expectedWidth);
-  assert.equal(surface.padding.join(','),clearEvening?'16,16,16,16':'12,16,16,16');
+  const surface=host.children[0],expectedWidth=screenWidth ? ({393:338,440:378})[screenWidth] : Number.isFinite(width)&&width>=300&&width<=500?width:378;
+  assert.equal(surface.size.width,0,"Native content stack must use automatic width");
+  const inset=expectedWidth<350?4:0;
+  assert.deepEqual(surface.padding,[(clearEvening?16:12)-inset,16,16-inset,16]);
   if(clearEvening){
     assert.equal(texts.find(t=>t.text==='Без відключень').font.size,26);
     assert.equal(texts.find(t=>t.text==='До кінця дня').font.size,11);
     assert.equal(texts.find(t=>t.text==='Чернівці').font.size,14);
+  }
+  if(warnings){
+    const notice=texts.find(t=>t.text.includes('\u0414\u0410\u0412\u041d\u0406 \u0414\u0410\u041d\u0406'));
+    assert.ok(notice.text.includes('\u0420\u0435\u0437\u0435\u0440\u0432:'));
+    assert.equal(notice.lineLimit,2);
   }
   assert.ok(surface.vertical);
   assert.equal(surface.backgroundImage.size.width,expectedWidth);
@@ -119,7 +126,17 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     assert.ok(marker);assert.equal(marker.tintColor.dark.hex,'F6F7FB');
     assert.equal(marker.imageSize.width,expectedWidth-32);
     const labels=texts.filter(t=>t.font?.size===12).map(t=>t.text);
-    assert.deepEqual(labels,['00','03','06','09','12','15','18','21','24']);
+    assert.deepEqual(labels,format12?['12','3','6','9','12','3','6','9','12']:['00','03','06','09','12','15','18','21','24']);
+    const ticks=surface.children.at(-1);
+    let x=0, index=0;
+    for(const child of ticks.children){
+      if(child.size){
+        assert.ok(Math.abs(x+child.size.width/2-(expectedWidth-32)*(16+index*71)/600)<1e-8,'Native label center aligns with the drawn tick');
+        x+=child.size.width;index++;
+      }else x+=child.spacer;
+    }
+    assert.equal(index,9);
+    assert.ok(Math.abs(x-(expectedWidth-32))<1e-8,'Axis fills exactly the timeline width');
     if(state==='off'&&!tomorrow)assert.ok(texts.some(t=>t.text==='Відключення триває'));
     if(tomorrow){assert.ok(texts.some(t=>t.text==='Наступне відключення · завтра'));assert.ok(texts.some(t=>t.text==='00:00'));assert.ok(texts.some(t=>t.text==='01:00'));assert.ok(texts.some(t=>t.text.includes('завтра · можливе заживлення')));}
     const colors=drawings.flatMap(d=>d.ops.map(op=>op.color?.hex));
@@ -138,6 +155,11 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   device.screenSize=()=>({width:360,height:780});
   assert.ok(sizing.homeWidgetSize(378).width<360,'Unrecognized screen uses a bounded fallback');
 
+  for(const screen of [393,440])for(const format12 of [false,true])for(const state of ['on','off','possible','unknown'])await render(378,state,'12','medium',false,false,false,screen,format12);
+  for(const screen of [393,440]){
+    await render(378,'off','12','medium',false,false,false,screen,true,true);
+    await render(378,'on','12','medium',false,false,true,screen,true);
+  }
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
   for(const state of ['on','possible','unknown'])await render(378,state);
   for(const width of [338,378,382])await render(width,'on','12','medium',false,false,true);

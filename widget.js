@@ -243,6 +243,10 @@ function addCheckedTime(container, checkedAt, color) {
   addText(row, kyivParts(checkedAt).time, 9, color);
 }
 
+function timelineX(fraction, width = 600) {
+  return width * (16 + fraction * 568) / 600;
+}
+
 function timeline(cells, time) {
   // Keep the soft bar palette stable; only the separate marker changes with appearance.
   const colors = {on:"72C69B", off:"DC8587", possible:"CFB879", unknown:"707986"};
@@ -277,8 +281,8 @@ function timeline(cells, time) {
     ctx.fillPath();
   }
   periods(cells).forEach(({start, end, state}) => {
-    const x = start === 0 ? 0 : 16 + start / 48 * 568;
-    const right = end === 48 ? 600 : 16 + end / 48 * 568;
+    const x = start === 0 ? 0 : timelineX(start / 48);
+    const right = end === 48 ? 600 : timelineX(end / 48);
     ctx.setFillColor(new Color(colors[state]));
     fillBarSpan(x, right - x);
   });
@@ -293,7 +297,7 @@ function timelineRuler() {
   const color = new Color(config.runsInApp && Device.isUsingDarkAppearance() ? "B5BDCD" : "5D6370");
   ctx.setFillColor(color);
   ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"].forEach((time, i) => {
-    const x = 16 + i * 71;
+    const x = timelineX(i / 8);
     ctx.fillRect(new Rect(Math.max(0, Math.min(598, x - 1)), 2, 2, 5));
   });
   return ctx.getImage();
@@ -361,7 +365,7 @@ function timelineMarker(graphic, time) {
   ctx.opaque = false;
   ctx.respectScreenScale = true;
   const [hour, minute] = time.split(":").map(Number);
-  const x = 16 + (hour + minute / 60) / 24 * 568;
+  const x = timelineX((hour + minute / 60) / 24);
   ctx.setFillColor(new Color("FFFFFF"));
   ctx.fillRect(new Rect(x - 1.5, 0, 3, height - 10));
   return ctx.getImage();
@@ -618,7 +622,7 @@ function homeWidgetSize(requestedWidth) {
     const screen = Device.screenSize();
     screenWidth = Math.min(screen.width, screen.height);
   } catch (_) {}
-  // Standard Home Screen sizing; unfamiliar/zoomed screens use a conservative fit.
+  // shortcut: standard-screen profiles estimate drawing bounds; calibrate Zoom/large-icon layouts on device.
   const profiles = {320:[292,141],375:[329,155],390:[338,158],393:[338,158],402:[344,162],414:[360,169],428:[364,170],430:[364,170],440:[378,530/3]};
   const known = profiles[screenWidth];
   const fallbackWidth = screenWidth > 0 ? Math.min(378, Math.max(240, screenWidth - 64)) : 378;
@@ -640,7 +644,10 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const dimensions = homeWidgetSize(settings.widgetWidth);
   const surfaceWidth = dimensions.width;
   const surfaceHeight = dimensions.height;
-  widget.size = new Size(surfaceWidth, surfaceHeight);
+  widget.size = new Size(0, surfaceHeight);
+  const compact = surfaceWidth < 350;
+  const verticalInset = compact ? 4 : 0;
+  const timeGap = compact ? 4 : 8;
   host.setPadding(0, 0, 0, 0);
   const ink = themeColor("181B23", "F6F7FB");
   const muted = themeColor(GLASS_STYLE ? "525E70" : "5D6370", "B5BDCD");
@@ -665,7 +672,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const usable = data && data.date === p.date && !error;
   const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextDayCells(data)) : null;
   const clearMessage = view && view.clearToday && !/^\d{2}:\d{2}$/.test(view.value);
-  widget.setPadding(clearMessage ? 16 : 12, 16, 16, 16);
+  widget.setPadding((clearMessage ? 16 : 12) - verticalInset, 16, 16 - verticalInset, 16);
   const header = widget.addStack();
   header.topAlignContent();
   addText(header, "Чернівці", 14, ink, true);
@@ -723,9 +730,9 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     const timeSize = notices.length ? 29 : 36;
     addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : clearMessage ? 26 : 22, ink, true);
     if (/^\d{2}:\d{2}$/.test(view.detail)) {
-      main.addSpacer(8);
+      main.addSpacer(timeGap);
       addText(main, "—", 22, muted);
-      main.addSpacer(8);
+      main.addSpacer(timeGap);
       addText(main, view.detail, timeSize, ink, true);
     }
     main.addSpacer();
@@ -761,11 +768,16 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     ticks.size = new Size(displayWidth, 0);
     const axisFont = 12;
     ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"].forEach((time, i) => {
-      if (i) ticks.addSpacer();
+      const labelWidth = timelineX(0, displayWidth) * 2;
+      if (i) ticks.addSpacer(timelineX(1 / 8, displayWidth) - timelineX(0, displayWidth) - labelWidth);
+      const cell = ticks.addStack();
+      cell.size = new Size(labelWidth, 0);
+      cell.addSpacer();
       let label = displayTimes(time).replace(/[:.][0٠۰]{2}(?![0-9٠-٩۰-۹])/u, "");
       if (i === 8 && /^\p{Number}+$/u.test(label)) label = "24";
       label = label.match(/\p{Number}+/u)?.[0] || label;
-      addText(ticks, label, axisFont, muted);
+      addText(cell, label, axisFont, muted);
+      cell.addSpacer();
     });
   } else widget.addSpacer();
   return host;
