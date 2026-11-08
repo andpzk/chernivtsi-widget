@@ -597,10 +597,10 @@ function makeLockScreenWidget(data, group, now, error, family) {
     } else if (state === "on") detail = "За графіком до кінця доби";
   }
   const stale = usable && now - data.sourceAt > 7200000;
-  const checked = usable ? `↻ ${kyivParts(data.checkedAt).time}${data.cached ? " · кеш" : stale ? " · давні" : ""}${data.source === "community" ? " · резерв" : ""}` : "";
+  const checked = usable ? `↻ ${kyivParts(data.checkedAt).time}${stale ? " · давні" : ""}` : "";
   if (family === "accessoryInline") {
     // Inline accessories accept a single text element; keep all essential meaning in it.
-    addText(widget, `${group} · ${status}${nextTime ? ` · зміна ${nextTime}` : ""}${data && data.cached ? " · кеш" : ""}`, 12, ink);
+    addText(widget, `${group} · ${status}${nextTime ? ` · зміна ${nextTime}` : ""}`, 12, ink);
     return widget;
   }
   widget.setPadding(2, 3, 2, 3);
@@ -612,7 +612,7 @@ function makeLockScreenWidget(data, group, now, error, family) {
     line(shortStatus, 9, true);
     line(nextTime ? nextTime.includes("завтра") ? "Завтра о" : "Зміна о" : "Графік", 8);
     line(nextTime.replace(" завтра", "") || "—", 14, true);
-    line(`${group}${data && data.cached ? " · кеш" : " група"}`, 8);
+    line(`${group} група`, 8);
     widget.addSpacer();
     return widget;
   }

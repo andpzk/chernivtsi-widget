@@ -80,11 +80,11 @@ assert.ok(noSymbol.texts.some(t=>t.includes('Заживлення')),'Missing sy
 assert.ok(noSymbol.texts.includes('21:30')&&noSymbol.texts.includes('22:00'));
 const noon=render({time:'11:59',kind:'noon',hour12:true});
 assert.equal(noon.texts.slice(0,3).join(''),'12:00 PM – 2:00 PM','Already-localized noon must not gain a second PM');
-assert.ok(render({cached:true,kind:'bounded'}).texts.includes('кеш'));
-assert.ok(render({sourceName:'community',kind:'bounded'}).texts.includes('резерв'));
+assert.ok(!render({cached:true,kind:'bounded'}).texts.includes('кеш'));
+assert.ok(!render({sourceName:'community',kind:'bounded'}).texts.includes('резерв'));
 assert.ok(render({kind:'stale'}).texts.some(t=>t.includes('давні')));
 const fallback=render({cached:true,sourceName:'community',kind:'bounded'});
-assert.ok(fallback.texts.includes('кеш · резерв'));
+assert.ok(!fallback.texts.some(t=>/кеш|резерв/.test(t)));
 assert.ok(!fallback.texts.some(t=>t.startsWith('↻')));
 assert.equal(fallback.texts.slice(0,3).join(''),'21:30 – 22:00');
 assert.ok(!fallback.texts.some(t=>t.startsWith('ще ')));
@@ -113,7 +113,7 @@ for(const kind of ['possibleLater','unknownLater']) {
   assert.ok(!uncertain.texts.includes('Без відключень'));
   assert.notEqual(uncertain.ctx.eventView(uncertain.cells,38).value,'Без відключень');
 }
-assert.ok(render({kind:'cancelled',cached:true}).texts.includes('кеш'));
+assert.ok(!render({kind:'cancelled',cached:true}).texts.includes('кеш'));
 assert.ok(render({kind:'cancelled',missingSymbol:true}).texts.includes('Без відключень'));
 const late=render({time:'23:59',kind:'late'});
 assert.ok(late.texts.includes('Час невідомий'));

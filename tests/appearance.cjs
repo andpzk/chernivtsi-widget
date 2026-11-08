@@ -71,7 +71,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
       assert.equal(texts.slice(0,3).map(t=>t.text).join(''),'21:30 – —');
       assert.ok(texts.some(t=>t.text.includes('кінець невідомий')));
       assert.ok(!texts.some(t=>/↻|група|12 ·|Можливе заживлення/.test(t.text)));
-      assert.ok(texts.some(t=>t.text.includes('кеш')));
+      assert.ok(!texts.some(t=>t.text.includes('кеш')));
       assert.deepEqual({...drawings[0].size},{width:150,height:14});
       assert.equal(drawings[0].respectScreenScale,true);
       assert.equal(drawings[0].opaque,false);
