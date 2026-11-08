@@ -1,6 +1,6 @@
 // Install once in Scriptable. Future widget code comes from andpzk/chernivtsi-widget.
 // Each widget's Parameter (1–12) overrides the group below.
-const LOCAL_SETTINGS = {group: 12, widgetWidth: 378};
+const LOCAL_SETTINGS = {group: 12};
 const REPOSITORY = "andpzk/chernivtsi-widget";
 const CHECK_INTERVAL = 60 * 60 * 1000;
 

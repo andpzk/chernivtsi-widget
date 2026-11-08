@@ -127,6 +127,16 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   } else assert.ok(texts.some(t=>t.text==='Вкажіть групу від 1 до 12'));
 }
 (async()=>{
+  const device={screenSize:()=>({width:393,height:852})};
+  const sizing=vm.createContext({module:{exports:{}},Device:device});
+  vm.runInContext(source,sizing);
+  for(const [screenWidth,screenHeight,width,height] of [[393,852,338,158],[852,393,338,158],[440,956,378,530/3],[390,844,338,158],[375,812,329,155],[430,932,364,170]]) {
+    device.screenSize=()=>({width:screenWidth,height:screenHeight});
+    for(const legacy of [undefined,378,500])assert.deepEqual({...sizing.homeWidgetSize(legacy)},{width,height},'Automatic and old installer sizes must fit the actual device');
+  }
+  device.screenSize=()=>({width:360,height:780});
+  assert.ok(sizing.homeWidgetSize(378).width<360,'Unrecognized screen uses a bounded fallback');
+
   for(const width of [338,364,378,379.333,382,undefined,NaN,900])await render(width);
   for(const state of ['on','possible','unknown'])await render(378,state);
   for(const width of [338,378,382])await render(width,'on','12','medium',false,false,true);
