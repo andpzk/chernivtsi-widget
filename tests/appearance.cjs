@@ -95,7 +95,8 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   assert.ok(surface.vertical);
   assert.equal(surface.backgroundImage.size.width,expectedWidth);
   assert.equal(surface.backgroundImage.opaque,false);
-  assert.ok(surface.backgroundImage.ops.some(op=>op.kind==='stroke'));
+  assert.equal(surface.backgroundImage.ops.length,80);
+  assert.ok(surface.backgroundImage.ops.every(op=>op.kind==='ellipse'),'Glass keeps soft reflections without a drawn rim');
   assert.ok(host.backgroundGradient.colors.every(c=>c.light&&c.dark),'Background must remain theme-aware after rendering');
   for(const drawing of drawings) {
     assert.ok(drawing.size.width>0&&drawing.size.height>0);
