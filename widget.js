@@ -394,30 +394,6 @@ function glassReflections(width, height) {
     ctx.setFillColor(new Color("DCEAFF", 0.004));
     ctx.fillEllipse(new Rect(width * (1 - scale * 0.7), height * (1.22 - scale * 0.5), width * scale * 1.4, height * scale));
   }
-  const rim = new Path();
-  rim.addRoundedRect(new Rect(0.6, 0.6, width - 1.2, height - 1.2), 26, 26);
-  ctx.addPath(rim);
-  ctx.setStrokeColor(new Color("FFFFFF", 0.2));
-  ctx.setLineWidth(0.7);
-  ctx.strokePath();
-  // Bright corners taper into the rim instead of outlining the whole card equally.
-  for (const bottom of [false, true]) {
-    const edge = new Path();
-    const mirror = (x, y) => new Point(bottom ? width - x : x, bottom ? height - y : y);
-    edge.move(mirror(0.6, 26));
-    for (let i = 1; i <= 16; i++) {
-      const angle = Math.PI + i / 16 * Math.PI / 2;
-      edge.addLine(mirror(26 + 25.4 * Math.cos(angle), 26 + 25.4 * Math.sin(angle)));
-    }
-    ctx.addPath(edge);
-    ctx.setStrokeColor(new Color("FFFFFF", bottom ? 0.32 : 0.5));
-    ctx.strokePath();
-    for (let x = 26; x < width * 0.8; x += 2) {
-      const opacity = (bottom ? 0.25 : 0.4) * Math.pow(1 - (x - 26) / (width * 0.8 - 26), 2);
-      ctx.setFillColor(new Color("FFFFFF", opacity));
-      ctx.fillRect(new Rect(bottom ? width - x - 2 : x, bottom ? height - 1.1 : 0.4, 2, 0.7));
-    }
-  }
   return ctx.getImage();
 }
 
