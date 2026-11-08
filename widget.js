@@ -724,7 +724,6 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   }
   const stale = now - data.sourceAt > 7200000;
   const notices = [];
-  if (data.cached) notices.push("ЗБЕРЕЖЕНО");
   if (stale) notices.push("ДАВНІ ДАНІ");
   if (data.source === "community") notices.push("Резерв: без сірих зон / аварій");
   if (data.emergency) {
