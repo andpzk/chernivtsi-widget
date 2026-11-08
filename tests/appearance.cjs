@@ -133,9 +133,11 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     for(const child of ticks.children){
       if(child.size){
         assert.deepEqual(child.padding,[0,0,0,0],"Narrow hour cells must not inherit padding");
-        assert.equal(child.vertical,true);
-        assert.equal(child.children.length,1,"Hour text must not compete with horizontal spacers");
-        assert.equal(child.children[0].font.size,12);
+        assert.notEqual(child.vertical,true,"Hour labels center horizontally");
+        assert.equal(child.children.length,3);
+        assert.deepEqual(child.children[0],{spacer:undefined});
+        assert.deepEqual(child.children[2],{spacer:undefined});
+        assert.equal(child.children[1].font.size,12);
         assert.ok(Math.abs(x+child.size.width/2-(expectedWidth-32)*(16+index*71)/600)<1e-8,'Native label center aligns with the drawn tick');
         x+=child.size.width;index++;
       }else x+=child.spacer;

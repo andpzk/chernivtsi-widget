@@ -774,12 +774,12 @@ function makeWidget(data, group, now, error = "", settings = {}) {
       const cell = ticks.addStack();
       cell.size = new Size(labelWidth, 0);
       cell.setPadding(0, 0, 0, 0);
-      cell.layoutVertically();
-      cell.centerAlignContent();
+      cell.addSpacer();
       let label = displayTimes(time).replace(/[:.][0٠۰]{2}(?![0-9٠-٩۰-۹])/u, "");
       if (i === 8 && /^\p{Number}+$/u.test(label)) label = "24";
       label = label.match(/\p{Number}+/u)?.[0] || label;
       addText(cell, label, axisFont, muted);
+      cell.addSpacer();
     });
   } else widget.addSpacer();
   return host;
