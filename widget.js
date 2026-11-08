@@ -738,7 +738,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     title.addSpacer();
     addText(title, view.headline, 11, muted);
     title.addSpacer();
-    if (clearMessage) widget.addSpacer(4);
+    widget.addSpacer(clearMessage ? 4 : 2);
     const main = widget.addStack();
     main.centerAlignContent();
     main.addSpacer();
@@ -753,6 +753,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     main.addSpacer();
     const subtitle = view.following || (/^\d{2}:\d{2}$/.test(view.detail) ? "" : view.detail);
     if (subtitle) {
+      widget.addSpacer(3);
       const following = widget.addStack();
       following.addSpacer();
       addText(following, subtitle, 10, muted);
