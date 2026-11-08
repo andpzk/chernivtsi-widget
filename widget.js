@@ -309,7 +309,7 @@ function scheduleView(cells, slot) {
   if (state === "unknown") return {state, headline:"Графік на цей час", value:"Немає даних", detail:"Перевірте пізніше", following};
   if (state === "on") {
     const next = future[0];
-    if (!next) return {state, headline:"Відключень не заплановано", value:"До 24:00", detail:"", following};
+    if (!next) return {state, headline:"До кінця дня", value:"Без відключень", detail:"", following, clearToday:true};
     const headlines = {off:"Наступне відключення", possible:"Невизначений період", unknown:"Дані відсутні з"};
     return {state, headline:headlines[next.state], value:clock(next.start), detail:`до ${clock(next.end)}`, following};
   }
@@ -497,7 +497,9 @@ function lockScreenStrip(model, width) {
 }
 
 function addLockScreenSchedule(widget, data, p, checked, ink, now) {
-  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data)), target = lockScreenTarget(data, now);
+  const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data));
+  const clearToday = scheduleView(data.cells, p.slot).clearToday;
+  const target = clearToday ? null : lockScreenTarget(data, now);
   const frame = widget.addStack();
   frame.addSpacer();
   const content = frame.addStack();
@@ -510,13 +512,13 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   event.centerAlignContent();
   const iconFrame = event.addStack();
   iconFrame.size = new Size(16, 0);
-  const symbol = SFSymbol.named(target ? target.state === "on" ? "bolt" : "bolt.slash" : "questionmark.circle");
+  const symbol = SFSymbol.named(target ? target.state === "on" ? "bolt" : "bolt.slash" : clearToday ? "bolt" : "questionmark.circle");
   if (symbol) {
     const icon = iconFrame.addImage(symbol.image);
     icon.imageSize = new Size(16, 20);
     icon.tintColor = ink;
     icon.applyFittingContentMode();
-  } else addText(iconFrame, target ? target.state === "on" ? "+" : "−" : "?", 14, ink);
+  } else addText(iconFrame, target ? target.state === "on" ? "+" : "−" : clearToday ? "+" : "?", 14, ink);
   event.addSpacer(4);
   if (target) {
     addLockScreenTime(event, target.time, ink);
@@ -524,15 +526,20 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
     separator.size = new Size(10, 0);
     addText(separator, " – ", 12, ink);
     addLockScreenTime(event, target.endTime, ink);
+  } else if (clearToday) {
+    const message = event.addStack();
+    message.layoutVertically();
+    addText(message, "Без відключень", 12, ink, true);
+    addText(message, "до кінця дня", 9, ink);
   } else {
     addText(event, "Час невідомий", 12, ink);
   }
   const notices = checked.split(" · ").slice(1);
   if (!symbol && target) notices.unshift(target.state === "on" ? "Заживлення" : "Відключення");
   if (target && !target.endTime) notices.push("кінець невідомий");
-  event.size = new Size(width, notices.length ? 22 : 26);
+  event.size = new Size(width, notices.length && !clearToday ? 22 : 26);
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
-  content.addSpacer(notices.length ? 5 : 7);
+  content.addSpacer(notices.length ? clearToday ? 1 : 5 : 7);
   const strip = content.addImage(lockScreenStrip(model, width));
   strip.imageSize = new Size(width,14);
   strip.tintColor = ink;

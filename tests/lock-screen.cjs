@@ -31,6 +31,9 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   const cells=Array(48).fill('on');cells.fill('off',38,42);cells.fill('possible',42,43);
   const data={cells,date:'2026-11-07',source:sourceName,sourceAt:now,checkedAt:now-60000,cached,emergency:kind==='emergency'};
   if(kind==='unknown')cells.fill('unknown');
+  if(kind==='cancelled')cells.fill('on',38);
+  if(kind==='possibleLater'){cells.fill('on',38);cells[46]='possible';}
+  if(kind==='unknownLater'){cells.fill('on',38);cells[46]='unknown';}
   if(kind==='gap')cells.fill('unknown',42,43);
   if(kind==='late')cells.fill('off',44);
   if(kind==='bounded')cells.fill('off',44);
@@ -86,7 +89,24 @@ for(const kind of ['empty','yesterday','unknown','emergency']){
   assert.equal(result.images.length,kind==='unknown'?2:0);
 }
 assert.ok(render({kind:'emergency'}).texts.includes('Аварійні відключення'));
-assert.ok(render({time:'23:59'}).texts.includes('Час невідомий'));
+for(const time of ['19:01','23:59']) {
+  const clear=render({time,kind:'cancelled'});
+  assert.ok(clear.texts.includes('Без відключень'));
+  assert.ok(clear.texts.includes('до кінця дня'));
+  assert.equal(clear.images[0].image.symbol,'bolt');
+  assert.equal(clear.drawings.length,1,'Keep the schedule strip');
+  assert.ok(!clear.texts.includes('Час невідомий'));
+  const home=clear.ctx.eventView(clear.cells,clear.ctx.kyivParts(clear.now).slot);
+  assert.equal(home.value,'Без відключень');
+  assert.equal(home.headline,'До кінця дня');
+}
+for(const kind of ['possibleLater','unknownLater']) {
+  const uncertain=render({kind});
+  assert.ok(!uncertain.texts.includes('Без відключень'));
+  assert.notEqual(uncertain.ctx.eventView(uncertain.cells,38).value,'Без відключень');
+}
+assert.ok(render({kind:'cancelled',cached:true}).texts.includes('кеш'));
+assert.ok(render({kind:'cancelled',missingSymbol:true}).texts.includes('Без відключень'));
 const late=render({time:'23:59',kind:'late'});
 assert.ok(late.texts.includes('Час невідомий'));
 assert.ok(late.texts.includes('01')&&late.texts.includes('04'));

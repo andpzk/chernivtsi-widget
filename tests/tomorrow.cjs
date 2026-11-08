@@ -78,6 +78,10 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
   assert.equal(upcoming.value,'00:00');assert.match(upcoming.headline,/завтра/);
   const futureData={...data,cells,tomorrow:{...data.tomorrow,cells:nextCells}};
   const at=ctx.kyivTimestamp('2026-11-07','23:40');
+  sample.texts.length=0;
+  ctx.makeLockScreenWidget({...futureData,cells:Array(48).fill('on')},12,at,'','accessoryRectangular');
+  assert.ok(sample.texts.includes('Без відключень')&&sample.texts.includes('до кінця дня'),'Prioritize a clear evening over tomorrow on the Lock Screen');
+  assert.ok(!sample.texts.includes('00:00'));
   for(const family of ['accessoryRectangular','accessoryInline','accessoryCircular']){
     sample.texts.length=0;ctx.makeLockScreenWidget(futureData,12,at,'',family);
     if(family==='accessoryRectangular'){assert.equal(sample.texts.slice(0,3).join(''),'01:30 – 05:00');assert.ok(!sample.texts.some(t=>/завтра|[+−]1|група/.test(t)));}
