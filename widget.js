@@ -636,6 +636,23 @@ function makeLockScreenWidget(data, group, now, error, family) {
   return widget;
 }
 
+function homeWidgetSize(requestedWidth) {
+  let screenWidth = 0;
+  try {
+    const screen = Device.screenSize();
+    screenWidth = Math.min(screen.width, screen.height);
+  } catch (_) {}
+  // Standard Home Screen sizing; unfamiliar/zoomed screens use a conservative fit.
+  const profiles = {320:[292,141],375:[329,155],390:[338,158],393:[338,158],402:[344,162],414:[360,169],428:[364,170],430:[364,170],440:[378,530/3]};
+  const known = profiles[screenWidth];
+  const fallbackWidth = screenWidth > 0 ? Math.min(378, Math.max(240, screenWidth - 64)) : 378;
+  const size = known || [fallbackWidth, Math.min(530/3, (fallbackWidth - 16) / 2)];
+  // Old installers sent 378 on every phone. Treat that value as automatic sizing.
+  const custom = Number.isFinite(requestedWidth) && requestedWidth >= 300 && requestedWidth <= 500 && requestedWidth !== 378;
+  const width = custom ? (screenWidth > 0 ? Math.min(requestedWidth, size[0]) : requestedWidth) : size[0];
+  return {width, height:custom && !screenWidth ? (Math.abs(width - 378) < 2 ? 530/3 : 170) : size[1]};
+}
+
 function makeWidget(data, group, now, error = "", settings = {}) {
   if (["accessoryRectangular", "accessoryInline", "accessoryCircular"].includes(config.widgetFamily)) {
     return makeLockScreenWidget(data, group, now, error, config.widgetFamily);
@@ -644,8 +661,9 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const host = new ListWidget();
   const widget = host.addStack();
   widget.layoutVertically();
-  const surfaceWidth = Number.isFinite(settings.widgetWidth) && settings.widgetWidth >= 300 && settings.widgetWidth <= 500 ? settings.widgetWidth : 378;
-  const surfaceHeight = Math.abs(surfaceWidth - 378) < 2 ? 530 / 3 : 170;
+  const dimensions = homeWidgetSize(settings.widgetWidth);
+  const surfaceWidth = dimensions.width;
+  const surfaceHeight = dimensions.height;
   widget.size = new Size(surfaceWidth, surfaceHeight);
   host.setPadding(0, 0, 0, 0);
   const ink = themeColor("181B23", "F6F7FB");

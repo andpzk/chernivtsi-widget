@@ -54,7 +54,7 @@ async function run(files, {remote=release('one'),offline=false,status=200,apiSta
 (async()=>{
   const files=new Map();
   let result=await run(files,{group:'7'});
-  assert.equal(result.widget.version,'one');assert.equal(result.widget.group,'7');assert.equal(result.widget.width,378);
+  assert.equal(result.widget.version,'one');assert.equal(result.widget.group,'7');assert.equal(result.widget.width,undefined,'New installs let the module detect device dimensions');
   assert.equal(result.requests,1);
   const first=JSON.parse(files.get(statePath)).current;
   assert.ok(files.has('/lib/chernivtsi-widget-updater/'+first));
