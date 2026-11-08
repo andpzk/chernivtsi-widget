@@ -129,21 +129,13 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     assert.deepEqual(labels,format12?['12','3','6','9','12','3','6','9','12']:['00','03','06','09','12','15','18','21','24']);
     const ticks=surface.children.at(-1);
     assert.deepEqual(ticks.padding,[0,0,0,0]);
-    let x=0, index=0;
-    for(const child of ticks.children){
-      if(child.size){
-        assert.deepEqual(child.padding,[0,0,0,0],"Narrow hour cells must not inherit padding");
-        assert.notEqual(child.vertical,true,"Hour labels center horizontally");
-        assert.equal(child.children.length,3);
-        assert.deepEqual(child.children[0],{spacer:undefined});
-        assert.deepEqual(child.children[2],{spacer:undefined});
-        assert.equal(child.children[1].font.size,12);
-        assert.ok(Math.abs(x+child.size.width/2-(expectedWidth-32)*(16+index*71)/600)<1e-8,'Native label center aligns with the drawn tick');
-        x+=child.size.width;index++;
-      }else x+=child.spacer;
-    }
-    assert.equal(index,9);
-    assert.ok(Math.abs(x-(expectedWidth-32))<1e-8,'Axis fills exactly the timeline width');
+    assert.equal(ticks.children.length,17);
+    assert.equal(ticks.size.width,expectedWidth-32);
+    ticks.children.forEach((child,i)=>{
+      assert.equal(child.children,undefined,'Do not constrain native hour text inside narrow nested cells');
+      if(i%2)assert.deepEqual(child,{spacer:undefined});
+      else {assert.equal(child.font.size,12);assert.equal(child.text,labels[i/2]);}
+    });
     if(state==='off'&&!tomorrow)assert.ok(texts.some(t=>t.text==='Відключення триває'));
     if(tomorrow){assert.ok(texts.some(t=>t.text==='Наступне відключення · завтра'));assert.ok(texts.some(t=>t.text==='00:00'));assert.ok(texts.some(t=>t.text==='01:00'));assert.ok(texts.some(t=>t.text.includes('завтра · можливе заживлення')));}
     const colors=drawings.flatMap(d=>d.ops.map(op=>op.color?.hex));

@@ -769,17 +769,11 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     ticks.setPadding(0, 0, 0, 0);
     const axisFont = 12;
     ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"].forEach((time, i) => {
-      const labelWidth = timelineX(0, displayWidth) * 2;
-      if (i) ticks.addSpacer(timelineX(1 / 8, displayWidth) - timelineX(0, displayWidth) - labelWidth);
-      const cell = ticks.addStack();
-      cell.size = new Size(labelWidth, 0);
-      cell.setPadding(0, 0, 0, 0);
-      cell.addSpacer();
+      if (i) ticks.addSpacer();
       let label = displayTimes(time).replace(/[:.][0٠۰]{2}(?![0-9٠-٩۰-۹])/u, "");
       if (i === 8 && /^\p{Number}+$/u.test(label)) label = "24";
       label = label.match(/\p{Number}+/u)?.[0] || label;
-      addText(cell, label, axisFont, muted);
-      cell.addSpacer();
+      addText(ticks, label, axisFont, muted);
     });
   } else widget.addSpacer();
   return host;
