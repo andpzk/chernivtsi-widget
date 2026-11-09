@@ -11,7 +11,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     addStack(){const c=new Container();this.children.push(c);return c;}
     addText(text){const c={text,centerAlignText(){}};this.children.push(c);texts.push(c);return c;}
     addSpacer(length){this.children.push({spacer:length});}
-    addImage(image){const c={image,applyFittingContentMode(){}};images.push(c);return c;}
+    addImage(image){const c={image,applyFittingContentMode(){}};this.children.push(c);images.push(c);return c;}
     layoutVertically(){this.vertical=true;}
     setPadding(...padding){this.padding=padding;}
     centerAlignContent(){}
@@ -34,15 +34,18 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     fillRect(rect){this.ops.push({kind:'rect',rect,color:this.fill});}
     addPath(shape){this.path=shape;}
     fillPath(){this.ops.push({kind:'path',path:this.path,color:this.fill});}
-    strokePath(){this.ops.push({kind:'stroke',path:this.path,color:this.stroke});}
+    strokePath(){this.ops.push({kind:'stroke',path:this.path,color:this.stroke,lineWidth:this.lineWidth});}
     drawImageInRect(image,rect){this.ops.push({kind:'image',image,rect});}
     getImage(){return {size:this.size,ops:this.ops,opaque:this.opaque};}
   }
   class Color {constructor(hex,alpha=1){Object.assign(this,{hex,alpha});}static dynamic(light,dark){return {light,dark};}}
-  class FixedDate extends Date {static now(){return Date.parse(tomorrow?'2026-11-07T21:40:00Z':'2026-11-07T17:01:00Z');}}
-  const cache={date:'2026-11-07',group:12,source:'official',emergency:false,checkedAt:FixedDate.now(),sourceAt:FixedDate.now(),cells:Array(48).fill('on')};
+  const beforeOutage=family==='small'&&state==='on';
+  class FixedDate extends Date {static now(){return Date.parse(tomorrow?'2026-11-07T21:40:00Z':beforeOutage?'2026-11-07T15:30:00Z':'2026-11-07T17:01:00Z');}}
+  const cache={date:'2026-11-07',group:12,source:'official',emergency:state==='emergency',checkedAt:FixedDate.now(),sourceAt:FixedDate.now(),cells:Array(48).fill('on')};
+  if(family==='small')cache.checkedAt-=7*60*1000;
   if(warnings){cache.source='community';cache.sourceAt-=3*60*60*1000;}
-  cache.cells.fill(state,38,42);cache.cells.fill('possible',42,43);
+  cache.cells.fill(beforeOutage?'off':state,38,42);cache.cells.fill('possible',42,43);
+  if(cache.emergency)cache.cells.fill('unknown');
   if(clearEvening)cache.cells.fill('on',38);
   if(tomorrow){cache.tomorrow={...cache,date:'2026-11-08',cells:Array(48).fill('on')};cache.tomorrow.cells.fill('off',0,2);cache.tomorrow.cells.fill('possible',2,3);}
   const ctx=vm.createContext({console:{log(){}},Intl,Date:FixedDate,module:{exports:{}},ListWidget,DrawContext,Path:Shape,Color,
@@ -87,6 +90,102 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   assert.equal(host.padding.join(','),'0,0,0,0');
   const surface=host.children[0],expectedWidth=screenWidth ? ({393:338,440:378})[screenWidth] : Number.isFinite(width)&&width>=300&&width<=500?width:378;
   assert.equal(surface.size.width,0,"Native content stack must use automatic width");
+  if(family==='small') {
+    const size=({320:141,393:158,440:530/3})[screenWidth];
+    assert.deepEqual({...surface.backgroundImage.size},{width:size,height:size},'Use the square glass surface');
+    assert.ok(host.backgroundGradient.colors.every(c=>c.light&&c.dark));
+    const groupLabel=`Чернівці · ${group==='12'?'12':'?'}`;
+    if(group!=='12') {
+      assert.equal(texts[0].text,groupLabel);
+      assert.equal(texts.find(t=>t.text==='Вкажіть групу від 1 до 12').lineLimit,2);
+      assert.equal(drawings.length,1,'Invalid schedules show a message without a timeline');
+      return;
+    }
+    if(state==='emergency') {
+      assert.equal(texts[0].text,groupLabel);
+      assert.equal(texts.find(t=>t.text==='Аварійні відключення').lineLimit,2);
+      assert.equal(drawings.length,1,'Emergency mode suppresses the forecast');
+      return;
+    }
+    const labels={on:'Є',off:'Нема',possible:'Можливо',unknown:'Невідомо'};
+    assert.equal(texts[0].text,labels[state]);
+    assert.equal(texts[0].font.size,13);
+    const dial=surface.children.find(child=>child.backgroundImage);
+    const content=dial.children[1];
+    const checkedTime=ctx.displayTimes(ctx.kyivParts(cache.checkedAt).time);
+    if(clearEvening) assert.ok(texts.some(t=>t.text==='Без відключень'));
+    else if(state==='unknown') assert.ok(texts.some(t=>t.text==='Немає даних'));
+    else {
+      const headline=state==='possible'?'Невизначений період':tomorrow?'Наступне · завтра':state==='off'?'Ще триває':'Наступне';
+      const range=tomorrow?(format12?'12:00 AM–1:00 AM':'00:00–01:00')
+        :state==='possible'?'19:00–21:30':format12?'7:00 PM–9:00 PM':'19:00–21:00';
+      assert.deepEqual(texts.map(t=>t.text),[labels[state],headline,range,groupLabel,...(missingSymbol?['↻']:[]),checkedTime]);
+      for(const label of [headline,range]) {
+        const text=texts.find(t=>t.text===label);
+        assert.ok(text,`Show ${label} inside the dial without breaking the line`);
+        assert.equal(text.lineLimit,1);
+        if(label===headline) assert.equal(text.font.size,13);
+        const row=content.children.find(child=>child.children?.includes(text));
+        assert.ok(row,'Center the label inside the schedule dial');
+        assert.deepEqual(row.children,[{spacer:undefined},text,{spacer:undefined}]);
+      }
+      const event=texts.find(t=>t.text===range);
+      if(format12) assert.ok(event.font.size>=(size>170?16:14)&&event.font.size<=18,'Enlarge AM/PM ranges within the available space');
+      else assert.equal(event.font.size,24);
+    }
+    assert.equal(texts.at(-1).text,checkedTime,'Show the stored check time below the city');
+    assert.equal(texts.at(missingSymbol?-3:-2).text,groupLabel);
+    assert.equal(texts.find(t=>t.text===groupLabel).font.size,13);
+    if(missingSymbol) assert.equal(texts.at(-2).text,'↻');
+    else assert.ok(images.some(image=>image.image.symbol==='arrow.clockwise'));
+    assert.ok(!texts.some(t=>/^Потім/.test(t.text)));
+    assert.ok(!texts.some(t=>/^\d\d$/.test(t.text)),'The dial has no hour numerals');
+    assert.deepEqual({...dial.size},{width:size,height:size});
+    assert.deepEqual(surface.children,[dial],'The full-square dial holds all visible content');
+    assert.deepEqual({...dial.backgroundImage.size},{...dial.size});
+    assert.equal(drawings.length,3,'Render a separate tintable marker over the ring');
+    const centerX=dial.size.width/2, centerY=dial.size.height/2;
+    const arcs=dial.backgroundImage.ops;
+    assert.ok(arcs.every(op=>op.kind==='stroke'&&op.lineWidth===4.5),'Use a bolder schedule ring');
+    const colors={on:'72C69B',off:'DC8587',possible:'CFB879',unknown:'707986'};
+    const states=cache.cells.filter((cell,i)=>cell!==cache.cells[i-1]);
+    assert.deepEqual(arcs.map(op=>op.color.hex),states.map(state=>colors[state]));
+    const first=arcs[0].path.points[0];
+    assert.equal(first.x,centerX,'Midnight starts at the top');
+    const ringInset=({320:8,393:12,440:17})[screenWidth];
+    assert.equal(first.y,ringInset,'Tighten the ring while leaving room on smaller screens');
+    const last=arcs.at(-1).path.points.at(-1);
+    assert.ok(Math.hypot(first.x-last.x,first.y-last.y)<1e-9,'The arcs cover the full day');
+    for(let i=1;i<arcs.length;i++)assert.deepEqual(arcs[i].path.points[0],arcs[i-1].path.points.at(-1));
+    function checkMarker(frame, minute) {
+      const region=frame.children.find(child=>child.children.some(node=>node.tintColor?.light?.hex==='181B23'));
+      assert.ok(region,'Place a theme-aware marker in the dial margin');
+      const marker=region.children[0];
+      assert.equal(marker.tintColor.dark.hex,'FFFFFF');
+      assert.equal(marker.image.ops.length,1,'Draw one solid stroke');
+      const [top,left,bottom,right]=region.padding;
+      assert.ok([top,left,bottom,right].every(value=>value>=0));
+      assert.ok(Math.abs(left+marker.imageSize.width+right-region.size.width)<1e-9);
+      assert.ok(Math.abs(top+marker.imageSize.height+bottom-region.size.height)<1e-9);
+      const point=marker.image.ops[0].path.points.at(-1);
+      const lastRegion=region===frame.children.at(-1);
+      const x=point.x+left+(lastRegion&&!frame.vertical?size-region.size.width:0);
+      const y=point.y+top+(lastRegion&&frame.vertical?size-region.size.height:0);
+      const angle=minute/1440*2*Math.PI;
+      const outerRadius=size/2-ringInset+3.5;
+      assert.ok(Math.hypot(x-(centerX+Math.sin(angle)*outerRadius),y-(centerY-Math.cos(angle)*outerRadius))<1e-9,'Marker uses the current Kyiv minute');
+    }
+    checkMarker(dial,tomorrow?23*60+40:beforeOutage?17*60+30:19*60+1);
+    if(tomorrow&&!format12) {
+      for(let minute=0;minute<1440;minute+=15) {
+        const frame=new Container();
+        frame.size=dial.size;
+        ctx.addDialContent(frame,`${Math.floor(minute/60)}:${minute%60}`);
+        checkMarker(frame,minute);
+      }
+    }
+    return;
+  }
   const inset=expectedWidth<350?4:0;
   assert.deepEqual(surface.padding,[(clearEvening?16:12)-inset,16,16-inset,16]);
   if(clearEvening){
@@ -161,6 +260,16 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   for(const state of ['on','off','possible','unknown'])await render(378,state,'12','medium',false,true);
   await render(378,'off','invalid');
   await render(378,'off','12','medium',true);
+  for(const screen of [393,440])for(const format12 of [false,true])for(const state of ['on','off'])await render(500,state,'12','small',false,false,false,screen,format12);
+  await render(378,'on','12','small',true,false,false,393);
+  await render(378,'on','12','small',true,false,false,320);
+  await render(378,'on','12','small',true,false,false,393,true);
+  await render(378,'on','12','small',true,false,false,440,true);
+  await render(378,'on','12','small',false,false,true,393);
+  await render(378,'unknown','12','small',false,true,false,393);
+  await render(378,'possible','12','small',false,false,false,393);
+  await render(378,'emergency','12','small',false,false,false,393);
+  await render(378,'off','invalid','small',false,false,false,393);
   for(const family of ['accessoryRectangular','accessoryCircular','accessoryInline'])await render(378,'off','12',family);
   console.log('PASS: glass layers, dynamic theme colors, widget-only APIs, sizing, status states, timeline/marker/labels, offline data and invalid group. Native pixels require iPhone verification.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

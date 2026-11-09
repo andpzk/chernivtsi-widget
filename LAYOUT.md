@@ -1,10 +1,10 @@
 # Widget layout rules
 
 - Keep native text and native stacks. Leave the outer content stack width automatic; use explicit bounds for drawings and their aligned labels.
-- The Home Screen layout targets the medium widget. Lock Screen families retain their separate layouts.
+- The small Home Screen widget uses the profile's widget height for both axes. Today's 24-hour schedule ring fills the square and contains the current status, event title, time range, and city with group number. Midnight is at the top and a solid hand marks the current Kyiv time in white on dark glass and dark ink on light glass. The medium Home Screen and Lock Screen families have separate layouts.
 - Screen profiles estimate drawing dimensions in points, not pixels. They are not a live measurement of the widget container.
-- Keep the existing font sizes and text-fitting limits. Below 350 points, reduce top/bottom padding by 4 points and time-range gaps from 8 to 4 before shrinking text.
-- Use `timelineX` for all Home Screen timeline positions: colored spans, ticks, and marker geometry. Hour labels use an unconstrained native row with flexible gaps; exact glyph-to-tick centering is not guaranteed. The bar extends to the full width; midnight tick centers remain inset.
+- For medium, below 350 points reduce top/bottom padding by 4 points and time-range gaps from 8 to 4 before shrinking text. Small uses one centered line each for the title and the range, with smaller type for longer localized ranges.
+- Use `timelineX` for the medium timeline's colored spans, ticks, and marker geometry. Hour labels use an unconstrained native row with flexible gaps. The bar extends to the full width with midnight ticks inset. The small dial shares one angular scale for the colored arcs and the hand.
 - Keep warnings visible and leave the schedule, colors, and glass reflections unchanged.
 
 ## Verification
