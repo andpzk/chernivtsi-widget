@@ -1,5 +1,5 @@
 // Chernivtsi widget module (API 1)
-// Scriptable: Calm / Calendar-style medium Home Screen widget. Default outage group: 12.
+// Scriptable: glass Home Screen widget in small and medium sizes. Default outage group: 12.
 // Widget Parameter can override the group with a number from 1 to 12.
 const DEFAULT_GROUP = 12;
 const GLASS_STYLE = true;
@@ -262,9 +262,9 @@ function timelineX(fraction, width = 600) {
   return width * (16 + fraction * 568) / 600;
 }
 
+const DAY_COLORS = {on:"72C69B", off:"DC8587", possible:"CFB879", unknown:"707986"};
+
 function timeline(cells, time) {
-  // Keep the soft bar palette stable; only the separate marker changes with appearance.
-  const colors = {on:"72C69B", off:"DC8587", possible:"CFB879", unknown:"707986"};
   const ctx = new DrawContext();
   const barHeight = 12, inset = 4;
   ctx.size = new Size(600, barHeight + inset * 2);
@@ -298,7 +298,7 @@ function timeline(cells, time) {
   periods(cells).forEach(({start, end, state}) => {
     const x = start === 0 ? 0 : timelineX(start / 48);
     const right = end === 48 ? 600 : timelineX(end / 48);
-    ctx.setFillColor(new Color(colors[state]));
+    ctx.setFillColor(new Color(DAY_COLORS[state]));
     fillBarSpan(x, right - x);
   });
   return ctx.getImage();
@@ -311,10 +311,10 @@ function timelineRuler() {
   ctx.respectScreenScale = true;
   const color = new Color(config.runsInApp && Device.isUsingDarkAppearance() ? "B5BDCD" : "5D6370");
   ctx.setFillColor(color);
-  ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"].forEach((time, i) => {
+  for (let i = 0; i <= 8; i++) {
     const x = timelineX(i / 8);
-    ctx.fillRect(new Rect(Math.max(0, Math.min(598, x - 1)), 2, 2, 5));
-  });
+    ctx.fillRect(new Rect(x - 1, 2, 2, 5));
+  }
   return ctx.getImage();
 }
 
@@ -384,6 +384,103 @@ function timelineMarker(graphic, time) {
   ctx.setFillColor(new Color("FFFFFF"));
   ctx.fillRect(new Rect(x - 1.5, 0, 3, height - 10));
   return ctx.getImage();
+}
+
+function dialPoint(size, slot, offset = 0) {
+  const side = Math.min(size.width, size.height);
+  // shortcut: calibrated to the mirrored 177 pt square, taper the reduction on narrower screens.
+  const inset = 8 + Math.min(9, Math.max(0, Math.round((side - 141) / 4)));
+  const radius = side / 2 - inset + offset;
+  const angle = slot / 48 * 2 * Math.PI;
+  return new Point(size.width / 2 + Math.sin(angle) * radius, size.height / 2 - Math.cos(angle) * radius);
+}
+
+function scheduleDial(cells, size) {
+  const ctx = new DrawContext();
+  ctx.size = size;
+  ctx.opaque = false;
+  ctx.respectScreenScale = true;
+  ctx.setLineWidth(4.5);
+  for (const {start, end, state} of periods(cells)) {
+    const arc = new Path();
+    arc.move(dialPoint(size, start));
+    for (let slot = start + 0.5; slot <= end; slot += 0.5) arc.addLine(dialPoint(size, slot));
+    ctx.addPath(arc);
+    ctx.setStrokeColor(new Color(DAY_COLORS[state]));
+    ctx.strokePath();
+  }
+  return ctx.getImage();
+}
+
+function addDialContent(dial, time) {
+  const {width, height} = dial.size;
+  const [hour, minute] = time.split(":").map(Number);
+  const slot = hour * 2 + minute / 30;
+  const center = dialPoint(dial.size, slot);
+  const markerSize = 10;
+  const x = center.x - markerSize / 2;
+  const y = center.y - markerSize / 2;
+  const ctx = new DrawContext();
+  ctx.size = new Size(markerSize, markerSize);
+  ctx.opaque = false;
+  ctx.respectScreenScale = true;
+  const start = dialPoint(dial.size, slot, -3.5);
+  const end = dialPoint(dial.size, slot, 3.5);
+  const hand = new Path();
+  hand.move(new Point(start.x - x, start.y - y));
+  hand.addLine(new Point(end.x - x, end.y - y));
+  ctx.setStrokeColor(new Color("FFFFFF"));
+  ctx.setLineWidth(1.8);
+  ctx.addPath(hand);
+  ctx.strokePath();
+
+  // Keep the tinted image in a margin around the native text so the theme can update it.
+  const verticalMargin = (height - 96) / 2;
+  const vertical = y + markerSize <= verticalMargin || y >= height - verticalMargin;
+  const first = vertical ? center.y < height / 2 : center.x < width / 2;
+  const margin = vertical ? verticalMargin : Math.ceil(Math.max(19, first ? x + markerSize : width - x));
+  if (vertical) dial.layoutVertically();
+  const marginSize = vertical ? new Size(width, margin) : new Size(margin, height);
+  const before = dial.addStack();
+  before.size = marginSize;
+  const content = dial.addStack();
+  content.layoutVertically();
+  content.size = vertical ? new Size(width, height - 2 * margin) : new Size(width - 2 * margin, height);
+  const after = dial.addStack();
+  after.size = marginSize;
+
+  (first ? after : before).addSpacer();
+  const edge = first ? before : after;
+  const left = x - (!vertical && !first ? width - margin : 0);
+  const top = y - (vertical && !first ? height - margin : 0);
+  edge.setPadding(top, left, Math.max(0, marginSize.height - top - markerSize), Math.max(0, marginSize.width - left - markerSize));
+  const marker = edge.addImage(ctx.getImage());
+  marker.imageSize = ctx.size;
+  marker.tintColor = themeColor("181B23", "FFFFFF");
+  return content;
+}
+
+function addCenteredText(stack, value, size, color, bold = false) {
+  const row = stack.addStack();
+  row.addSpacer();
+  const text = addText(row, value, size, color, bold);
+  row.addSpacer();
+  return text;
+}
+
+function addPowerBadge(row, state, color, small = false) {
+  const names = small ? {on:"Є", off:"Нема", possible:"Можливо", unknown:"Невідомо"}
+    : {on:"Є світло", off:"Нема світла", possible:"Зараз буде", unknown:"Немає даних"};
+  const badge = row.addStack();
+  badge.centerAlignContent();
+  badge.spacing = 5;
+  const symbol = SFSymbol.named({on:"bolt.fill", off:"bolt.slash.fill", possible:"bolt.fill", unknown:"questionmark.circle"}[state]);
+  if (symbol) {
+    const icon = badge.addImage(symbol.image);
+    icon.imageSize = small ? new Size(10, 13) : new Size(12, 14);
+    icon.tintColor = color;
+  }
+  addText(badge, names[state], small ? 13 : 14, color, true);
 }
 
 function nextRefreshAt(data, now) {
@@ -656,8 +753,9 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const widget = host.addStack();
   widget.layoutVertically();
   const dimensions = homeWidgetSize(settings.widgetWidth);
-  const surfaceWidth = dimensions.width;
+  const small = config.widgetFamily === "small";
   const surfaceHeight = dimensions.height;
+  const surfaceWidth = small ? surfaceHeight : dimensions.width;
   widget.size = new Size(0, surfaceHeight);
   const compact = surfaceWidth < 350;
   const verticalInset = compact ? 4 : 0;
@@ -685,48 +783,83 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   const p = kyivParts(now);
   const usable = data && data.date === p.date && !error;
   const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextDayCells(data)) : null;
+  const statusColor = view?.state === "on" ? green : view?.state === "off" ? red : amber;
+  if (small && view) {
+    widget.setPadding(0, 0, 0, 0);
+    const dial = widget.addStack();
+    dial.size = new Size(surfaceWidth, surfaceHeight);
+    dial.backgroundImage = scheduleDial(data.cells, dial.size);
+    const content = addDialContent(dial, p.time);
+    const textWidth = Math.min(surfaceWidth - 38, content.size.width);
+    const inset = (content.size.width - textWidth) / 2;
+    content.setPadding(0, inset, 0, inset);
+    content.addSpacer();
+
+    const status = content.addStack();
+    status.addSpacer();
+    addPowerBadge(status, view.state, statusColor, true);
+    status.addSpacer();
+    content.addSpacer(2);
+    const headline = view.headline.replace(/^Наступне відключення/, "Наступне").replace(/^Відключення триває/, "Ще триває");
+    addCenteredText(content, headline, 13, muted).minimumScaleFactor = 0.65;
+    content.addSpacer(3);
+
+    const hasRange = /^\d{2}:\d{2}$/.test(view.detail);
+    const value = hasRange ? `${view.value}–${view.detail}` : view.value;
+    const displayLength = displayTimes(value).length;
+    let fontSize = hasRange ? 24 : 18;
+    if (hasRange && (displayLength > value.length || textWidth < 80)) {
+      // shortcut: estimate range width at 0.52 em per character, recalibrate if a device clips.
+      fontSize = Math.min(18, Math.floor(textWidth / (displayLength * 0.52)));
+    }
+    addCenteredText(content, value, fontSize, ink, true).minimumScaleFactor = 0.55;
+    content.addSpacer(2);
+    addCenteredText(content, `Чернівці · ${group}`, 13, muted);
+    content.addSpacer(2);
+    const checked = content.addStack();
+    checked.addSpacer();
+    addCheckedTime(checked, data.checkedAt, muted);
+    checked.addSpacer();
+    content.addSpacer();
+    return host;
+  }
   const clearMessage = view && view.clearToday && !/^\d{2}:\d{2}$/.test(view.value);
-  widget.setPadding((clearMessage ? 16 : 12) - verticalInset, 16, 16 - verticalInset, 16);
+  if (small) widget.setPadding(12, 13, 12, 13);
+  else widget.setPadding((clearMessage ? 16 : 12) - verticalInset, 16, 16 - verticalInset, 16);
   const header = widget.addStack();
   header.topAlignContent();
-  addText(header, "Чернівці", 14, ink, true);
+  addText(header, small ? `Чернівці · ${group}` : "Чернівці", small ? 12 : 14, ink, true);
   header.addSpacer();
-  if (view) {
-    const color = view.state === "on" ? green : view.state === "off" ? red : amber;
-    const names = {on:"Є світло", off:"Нема світла", possible:"Зараз буде", unknown:"Немає даних"};
-    const badge = header.addStack();
-    badge.centerAlignContent();
-    badge.spacing = 5;
-    const symbol = SFSymbol.named({on:"bolt.fill", off:"bolt.slash.fill", possible:"bolt.fill", unknown:"questionmark.circle"}[view.state]);
-    if (symbol) {
-      const icon = badge.addImage(symbol.image);
-      icon.imageSize = new Size(12, 14);
-      icon.tintColor = color;
-    }
-    addText(badge, names[view.state], 14, color, true);
-  } else addText(header, p.date.slice(8) + "." + p.date.slice(5, 7), 11, muted);
-  const metadata = widget.addStack();
-  metadata.centerAlignContent();
-  addText(metadata, `${group} група`, 10, muted);
-  metadata.addSpacer();
-  if (view) addCheckedTime(metadata, data.checkedAt, muted);
-  widget.addSpacer(clearMessage ? 8 : 2);
+  if (view) addPowerBadge(header, view.state, statusColor);
+  else if (!small) addText(header, p.date.slice(8) + "." + p.date.slice(5, 7), 11, muted);
+  if (!small) {
+    const metadata = widget.addStack();
+    metadata.centerAlignContent();
+    addText(metadata, `${group} група`, 10, muted);
+    metadata.addSpacer();
+    if (view) addCheckedTime(metadata, data.checkedAt, muted);
+    widget.addSpacer(clearMessage ? 8 : 2);
+  }
   if (view && !clearMessage) widget.addSpacer();
   if (!usable) {
     widget.addSpacer();
-    addText(widget, error || "Немає графіка на сьогодні", 19, ink, true);
+    const message = addText(widget, error || "Немає графіка на сьогодні", small ? 16 : 19, ink, true);
+    if (small) message.lineLimit = 2;
     widget.addSpacer(5);
-    addText(widget, "Торкніться, щоб перевірити ще раз", 11, muted);
+    const retry = addText(widget, "Торкніться, щоб перевірити ще раз", 11, muted);
+    if (small) retry.lineLimit = 2;
     widget.addSpacer();
-    addText(widget, data ? `Останні дані: ${data.date}` : "Успішного оновлення ще не було", 11, muted);
+    if (!small) addText(widget, data ? `Останні дані: ${data.date}` : "Успішного оновлення ще не було", 11, muted);
     return host;
   }
   const notices = [];
   if (data.emergency) {
     widget.addSpacer();
-    addText(widget, "Аварійні відключення", 20, red, true);
+    const message = addText(widget, "Аварійні відключення", small ? 16 : 20, red, true);
+    if (small) message.lineLimit = 2;
     widget.addSpacer(5);
-    addText(widget, "Час заживлення невідомий", 12, muted);
+    const detail = addText(widget, "Час заживлення невідомий", small ? 11 : 12, muted);
+    if (small) detail.lineLimit = 2;
     widget.addSpacer();
   } else {
     const title = widget.addStack();
@@ -759,7 +892,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     widget.addSpacer();
   }
   if (notices.length) addText(widget, notices.join(" · "), 10, amber).lineLimit = 2;
-  if (!view) addCheckedTime(widget, data.checkedAt, muted);
+  if (!view && !small) addCheckedTime(widget, data.checkedAt, muted);
   if (view) {
     widget.addSpacer(4);
     const graphic = timelineGraphic(data.cells, p.time);
