@@ -534,10 +534,11 @@ function lockScreenTarget(data, now) {
   for (let at = (Math.floor(now / halfHour) + 1) * halfHour; at < end; at += halfHour) {
     const p = kyivParts(at);
     const cells = p.date === data.date ? data.cells : p.date === nextDate ? tomorrow : null;
-    if (!cells || cells[p.slot] === "unknown") break;
+    if (!cells || cells[p.slot] === "unknown") return target;
     if (target && cells[p.slot] !== wanted) return {...target, endAt:at, endTime:p.time};
     if (!target && cells[p.slot] === wanted) target = {at, time:p.time, state:wanted, endAt:null, endTime:null};
   }
+  if (!tomorrow && target?.state === "off") return {...target, throughMidnight:true};
   return target;
 }
 
@@ -616,6 +617,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   const model = lockScreenSchedule(data.cells, p.time, nextDayCells(data));
   const clearToday = scheduleView(data.cells, p.slot).clearToday;
   const target = clearToday ? null : lockScreenTarget(data, now);
+  const endTime = target?.throughMidnight ? "00:00" : target?.endTime;
   const frame = widget.addStack();
   frame.addSpacer();
   const content = frame.addStack();
@@ -641,7 +643,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
     const separator = event.addStack();
     separator.size = new Size(10, 0);
     addText(separator, " – ", 12, ink);
-    addLockScreenTime(event, target.endTime, ink);
+    addLockScreenTime(event, endTime, ink);
   } else if (clearToday) {
     const message = event.addStack();
     message.layoutVertically();
@@ -653,7 +655,7 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   }
   const notices = checked.split(" · ").slice(1);
   if (!symbol && target) notices.unshift(target.state === "on" ? "Заживлення" : "Відключення");
-  if (target && !target.endTime) notices.push("кінець невідомий");
+  if (target && !endTime) notices.push("кінець невідомий");
   event.size = new Size(width, notices.length && !clearToday ? 22 : 26);
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
   content.addSpacer(notices.length ? clearToday ? 1 : 5 : 7);
