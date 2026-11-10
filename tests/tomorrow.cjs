@@ -28,6 +28,13 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
   assert.equal(ctx.shiftDate('2028-02-28',1),'2028-02-29');
   assert.equal(ctx.shiftDate('2026-03-29',1),'2026-03-30');
   assert.equal(ctx.shiftDate('2026-10-25',1),'2026-10-26');
+  const midday=ctx.kyivTimestamp('2026-11-07','12:00');
+  const daily={date:'2026-11-07',cells:Array(48).fill('on')};
+  assert.equal(ctx.nextRefreshAt(daily,midday),ctx.kyivTimestamp('2026-11-08','00:00'),'Request the next daily check at Kyiv midnight');
+  daily.cells.fill('off',38,42);
+  assert.equal(ctx.nextRefreshAt(daily,midday),ctx.kyivTimestamp('2026-11-07','19:00'),'Request an earlier check at a scheduled state change');
+  const fallMidnight=ctx.kyivTimestamp('2026-10-25','00:00');
+  assert.equal(ctx.nextRefreshAt(null,fallMidnight),ctx.kyivTimestamp('2026-10-26','00:00'),'Keep the daily check at local midnight on a 25-hour day');
   for(let group=1;group<=12;group++) {
     const current=ctx.parseOfficial(todayHtml,group,captured);
     const next=ctx.parseOfficial(tomorrowHtml,group,captured,'2026-11-08');
