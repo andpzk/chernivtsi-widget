@@ -5,7 +5,6 @@ const DEFAULT_GROUP = 12;
 const GLASS_STYLE = true;
 const OFFICIAL_URL = "https://oblenergo.cv.ua/shutdowns/";
 const FALLBACK_URL = "https://raw.githubusercontent.com/chaichuk/UA-power-outages-monitor/main/artifacts/chernivtsi.json";
-const REFRESH_MINUTES = 15;
 const COLORS = {on: "55D6A0", off: "FF7979", possible: "F5C66B", unknown: "64748B"};
 const LABELS = {on: "Заживлено", off: "Відключення", possible: "Можливо заживлено", unknown: "Немає даних"};
 
@@ -485,16 +484,15 @@ function addPowerBadge(row, state, color, small = false) {
 
 function nextRefreshAt(data, now) {
   const current = kyivParts(now);
-  let next = now + REFRESH_MINUTES * 60000;
-  // Kyiv schedule slots change on half-hours; also refresh when the local date changes.
+  const midnight = kyivTimestamp(shiftDate(current.date, 1), "00:00");
+  if (!data || data.date !== current.date || data.emergency) return midnight;
+  // Walk real half-hour boundaries so the refresh also follows clock changes in Kyiv.
   const halfHour = 30 * 60000;
-  for (let boundary = (Math.floor(now / halfHour) + 1) * halfHour; boundary < next; boundary += halfHour) {
-    const at = kyivParts(boundary);
-    const changes = data && data.date === current.date && !data.emergency
-      && data.cells[at.slot] !== data.cells[current.slot];
-    if (at.date !== current.date || changes) next = boundary;
+  const state = data.cells[current.slot];
+  for (let boundary = (Math.floor(now / halfHour) + 1) * halfHour; boundary < midnight; boundary += halfHour) {
+    if (data.cells[kyivParts(boundary).slot] !== state) return boundary;
   }
-  return next;
+  return midnight;
 }
 
 function glassReflections(width, height) {
