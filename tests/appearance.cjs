@@ -88,7 +88,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     return;
   }
   assert.equal(host.padding.join(','),'0,0,0,0');
-  const surface=host.children[0],expectedWidth=screenWidth ? ({393:338,440:378})[screenWidth] : Number.isFinite(width)&&width>=300&&width<=500?width:378;
+  const surface=host.children[0],expectedWidth=screenWidth ? ({320:292,393:338,440:378})[screenWidth] : Number.isFinite(width)&&width>=300&&width<=500?width:378;
   assert.equal(surface.size.width,0,"Native content stack must use automatic width");
   if(family==='small') {
     const size=({320:141,393:158,440:530/3})[screenWidth];
@@ -187,7 +187,30 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     return;
   }
   const inset=expectedWidth<350?4:0;
-  assert.deepEqual(surface.padding,[(clearEvening?16:12)-inset,16,16-inset,16]);
+  if(tomorrow){
+    const todayLabel=surface.children.findIndex(child=>child.text==='Сьогодні');
+    const tomorrowLabel=surface.children.findIndex(child=>child.text==='Завтра');
+    assert.ok(todayLabel>=0 && todayLabel<tomorrowLabel,'Label both days in order');
+    const todayChart=surface.children[todayLabel+1];
+    const tomorrowChart=surface.children[tomorrowLabel+1];
+    assert.equal(todayChart.size.width,expectedWidth-32);
+    assert.equal(tomorrowChart.imageSize.width,expectedWidth-32);
+    assert.equal(todayChart.children.filter(child=>child.tintColor?.light?.hex==='000000').length,1);
+    assert.equal(images.filter(image=>image.tintColor?.light?.hex==='000000').length,1,'Only today gets the current-time marker');
+    const tomorrowBar=tomorrowChart.image.ops[0].image;
+    assert.deepEqual(tomorrowBar.ops.map(op=>op.color.hex),['DC8587','CFB879','72C69B']);
+    assert.equal(surface.children.indexOf(tomorrowChart)+1,surface.children.length-1,'Hour labels follow the two bars');
+    assert.ok(!texts.some(t=>t.text.startsWith('Потім')));
+  }else{
+    assert.deepEqual(surface.padding,[(clearEvening?16:12)-inset,16,16-inset,16]);
+    assert.ok(!texts.some(t=>t.text==='Сьогодні'||t.text==='Завтра'));
+  }
+  if(family==='medium' && group==='12'){
+    const nextHour=Math.floor(FixedDate.now()/3600000)*3600000+3600000;
+    const scheduled=ctx.nextRefreshAt(cache,FixedDate.now());
+    assert.equal(host.refreshAfterDate.getTime(),tomorrow?scheduled:Math.min(nextHour,scheduled),
+      'Check for publication before midnight while the medium widget has no tomorrow data');
+  }
   if(clearEvening){
     assert.equal(texts.find(t=>t.text==='Без відключень').font.size,26);
     assert.equal(texts.find(t=>t.text==='До кінця дня').font.size,11);
@@ -221,7 +244,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     assert.ok(marker);assert.equal(marker.tintColor.dark.hex,'F6F7FB');
     assert.equal(marker.imageSize.width,expectedWidth-32);
     const labels=texts.filter(t=>t.font?.size===12).map(t=>t.text);
-    assert.deepEqual(labels,format12?['12','3','6','9','12','3','6','9','12']:['00','03','06','09','12','15','18','21','24']);
+    assert.deepEqual(labels,format12&&!tomorrow?['12','3','6','9','12','3','6','9','12']:['00','03','06','09','12','15','18','21','24']);
     const ticks=surface.children.at(-1);
     assert.deepEqual(ticks.padding,[0,0,0,0]);
     assert.equal(ticks.children.length,17);
@@ -232,7 +255,11 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
       else {assert.equal(child.font.size,12);assert.equal(child.text,labels[i/2]);}
     });
     if(state==='off'&&!tomorrow)assert.ok(texts.some(t=>t.text==='Відключення триває'));
-    if(tomorrow){assert.ok(texts.some(t=>t.text==='Наступне відключення · завтра'));assert.ok(texts.some(t=>t.text==='00:00'));assert.ok(texts.some(t=>t.text==='01:00'));assert.ok(texts.some(t=>t.text.includes('завтра · можливе заживлення')));}
+    if(tomorrow){
+      assert.ok(texts.some(t=>t.text==='Наступне відключення · завтра'));
+      assert.ok(texts.some(t=>t.text===(format12?'12:00 AM':'00:00')));
+      assert.ok(texts.some(t=>t.text===(format12?'1:00 AM':'01:00')));
+    }
     const colors=drawings.flatMap(d=>d.ops.map(op=>op.color?.hex));
     assert.ok(colors.includes('72C69B')&&(clearEvening||colors.includes('CFB879')));
     if(state==='off')assert.ok(colors.includes('DC8587'));
@@ -259,7 +286,7 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   for(const width of [338,378,382])await render(width,'on','12','medium',false,false,true);
   for(const state of ['on','off','possible','unknown'])await render(378,state,'12','medium',false,true);
   await render(378,'off','invalid');
-  await render(378,'off','12','medium',true);
+  for(const screen of [320,393,440])for(const format12 of [false,true])await render(378,'off','12','medium',true,false,false,screen,format12);
   for(const screen of [393,440])for(const format12 of [false,true])for(const state of ['on','off'])await render(500,state,'12','small',false,false,false,screen,format12);
   await render(378,'on','12','small',true,false,false,393);
   await render(378,'on','12','small',true,false,false,320);
