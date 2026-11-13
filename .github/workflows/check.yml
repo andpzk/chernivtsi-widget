@@ -12,3 +12,22 @@ jobs:
       - run: node tests/appearance.cjs
       - run: node tests/lock-screen.cjs
       - run: node tests/tomorrow.cjs
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test Android schedule and design
+        run: |
+          classes="$RUNNER_TEMP/android-checks"
+          src=android/app/src/main/java/ua/chernivtsi/electricity
+          mkdir -p "$classes"
+          javac -encoding UTF-8 -d "$classes" "$src/Schedule.java" "$src/WidgetDesign.java" android/tests/*.java
+          java -ea -cp "$classes" ua.chernivtsi.electricity.DesignCheck android/design.properties
+          java -ea -cp "$classes" ua.chernivtsi.electricity.ScheduleCheck \
+            tests/fixtures/official-2026-11-07.html tests/fixtures/official-2026-11-08.html
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
+      - name: Build and lint Android
+        working-directory: android
+        run: ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
