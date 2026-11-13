@@ -831,7 +831,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   }
   const clearMessage = view && view.clearToday && !/^\d{2}:\d{2}$/.test(view.value);
   if (small) widget.setPadding(12, 13, 12, 13);
-  else if (showTomorrow) widget.setPadding(compact ? 3 : 8, 16, compact ? 3 : 8, 16);
+  else if (showTomorrow) widget.setPadding(compact ? 7 : 12, 16, compact ? 7 : 12, 16);
   else widget.setPadding((clearMessage ? 16 : 12) - verticalInset, 16, 16 - verticalInset, 16);
   const header = widget.addStack();
   header.topAlignContent();
@@ -847,7 +847,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     if (view) addCheckedTime(metadata, data.checkedAt, muted);
     widget.addSpacer(showTomorrow ? 2 : clearMessage ? 8 : 2);
   }
-  if (view && !clearMessage) widget.addSpacer();
+  if (view && (!clearMessage || showTomorrow)) widget.addSpacer();
   if (!usable) {
     widget.addSpacer();
     const message = addText(widget, error || "Немає графіка на сьогодні", small ? 16 : 19, ink, true);
@@ -895,8 +895,11 @@ function makeWidget(data, group, now, error = "", settings = {}) {
       following.addSpacer();
     }
     const chartGap = 2;
-    widget.addSpacer(notices.length ? Math.max(2, Math.round(chartGap / 2)) : chartGap);
-    widget.addSpacer();
+    if (showTomorrow) widget.addSpacer(1);
+    else {
+      widget.addSpacer(notices.length ? Math.max(2, Math.round(chartGap / 2)) : chartGap);
+      widget.addSpacer();
+    }
   }
   if (notices.length) addText(widget, notices.join(" · "), 10, amber).lineLimit = 2;
   if (!view && !small) addCheckedTime(widget, data.checkedAt, muted);
@@ -904,12 +907,16 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     if (!showTomorrow) widget.addSpacer(4);
     if (showTomorrow) addText(widget, "Сьогодні", 9, muted);
     const graphic = showTomorrow ? timeline(data.cells) : timelineGraphic(data.cells, p.time);
-    const chart = widget.addStack();
     const displayWidth = surfaceWidth - 32;
-    // Both layers must share one frame; a flexible spacer shifted the marker relative to the bar.
-    chart.size = new Size(displayWidth, displayWidth * graphic.size.height / graphic.size.width);
-    chart.setPadding(0, 0, 0, 0);
-    chart.backgroundImage = graphic;
+    const addChartFrame = image => {
+      const frame = widget.addStack();
+      frame.size = new Size(displayWidth, displayWidth * image.size.height / image.size.width);
+      frame.setPadding(0, 0, 0, 0);
+      frame.backgroundImage = image;
+      return frame;
+    };
+    // Match both native frames so Scriptable scales the bars the same way.
+    const chart = addChartFrame(graphic);
     // Tint stays dynamic after rendering; DrawContext would freeze the marker color.
     const marker = chart.addImage(timelineMarker(graphic, p.time, showTomorrow ? 0 : undefined));
     marker.resizable = true;
@@ -918,10 +925,8 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     marker.applyFittingContentMode();
     if (showTomorrow) {
       addText(widget, "Завтра", 9, muted);
-      const nextGraphic = timelineGraphic(nextCells);
-      const nextChart = widget.addImage(nextGraphic);
-      nextChart.imageSize = new Size(displayWidth, displayWidth * nextGraphic.size.height / nextGraphic.size.width);
-      nextChart.applyFittingContentMode();
+      addChartFrame(timeline(nextCells)).addSpacer(displayWidth);
+      addChartFrame(timelineRuler()).addSpacer(displayWidth);
     }
     const ticks = widget.addStack();
     ticks.size = new Size(displayWidth, 0);

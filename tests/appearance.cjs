@@ -194,12 +194,21 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     const todayChart=surface.children[todayLabel+1];
     const tomorrowChart=surface.children[tomorrowLabel+1];
     assert.equal(todayChart.size.width,expectedWidth-32);
-    assert.equal(tomorrowChart.imageSize.width,expectedWidth-32);
+    assert.deepEqual(tomorrowChart.size,todayChart.size,'Both day bars use the same native frame');
+    assert.deepEqual(tomorrowChart.padding,todayChart.padding);
+    assert.deepEqual(tomorrowChart.backgroundImage.size,todayChart.backgroundImage.size);
     assert.equal(todayChart.children.filter(child=>child.tintColor?.light?.hex==='000000').length,1);
     assert.equal(images.filter(image=>image.tintColor?.light?.hex==='000000').length,1,'Only today gets the current-time marker');
-    const tomorrowBar=tomorrowChart.image.ops[0].image;
-    assert.deepEqual(tomorrowBar.ops.map(op=>op.color.hex),['DC8587','CFB879','72C69B']);
-    assert.equal(surface.children.indexOf(tomorrowChart)+1,surface.children.length-1,'Hour labels follow the two bars');
+    assert.deepEqual(tomorrowChart.backgroundImage.ops.map(op=>op.color.hex),['DC8587','CFB879','72C69B']);
+    const ruler=surface.children[tomorrowLabel+2];
+    assert.equal(ruler.size.width,todayChart.size.width);
+    assert.equal(ruler.backgroundImage.ops.length,9,'One common ruler follows the two bars');
+    assert.equal(ruler,surface.children.at(-2),'Hour labels follow the ruler');
+    const eventRow=surface.children.findIndex(child=>child.children?.some(node=>node.text==='—'));
+    assert.deepEqual(surface.children.slice(eventRow+1,todayLabel),[{spacer:1}],'Keep the event time close to the today label');
+    const [top,,bottom]=surface.padding;
+    assert.equal(top,bottom);
+    assert.ok(top>(inset?3:8),'Increase both outer vertical insets');
     assert.ok(!texts.some(t=>t.text.startsWith('Потім')));
   }else{
     assert.deepEqual(surface.padding,[(clearEvening?16:12)-inset,16,16-inset,16]);
