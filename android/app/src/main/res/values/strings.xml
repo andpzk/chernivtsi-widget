@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Чернівці Світло</string>
+    <string name="ring_widget">Чернівці · Кільце</string>
+    <string name="wide_widget">Чернівці · Графік</string>
+    <string name="ring_description">Добове кільце і найближчий інтервал для вибраної групи</string>
+    <string name="wide_description">Графік на сьогодні й завтра для вибраної групи</string>
+    <string name="loading">Завантаження графіка…</string>
+    <style name="BaseAppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#176147</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#EDF2F6</item>
+    </style>
+    <style name="AppTheme" parent="BaseAppTheme" />
+    <style name="GroupTheme" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">#176147</item>
+    </style>
+</resources>
