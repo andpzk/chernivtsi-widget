@@ -25,8 +25,9 @@ jobs:
           java -ea -cp "$classes" ua.chernivtsi.electricity.DesignCheck android/design.properties
           java -ea -cp "$classes" ua.chernivtsi.electricity.ScheduleCheck \
             tests/fixtures/official-2026-11-07.html tests/fixtures/official-2026-11-08.html
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
       - name: Build and lint Android
         working-directory: android
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-          ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+        run: ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
