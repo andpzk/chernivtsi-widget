@@ -372,7 +372,7 @@ function timelineGraphic(cells, time) {
   return ctx.getImage();
 }
 
-function timelineMarker(graphic, time) {
+function timelineMarker(graphic, time, rulerHeight = 10) {
   const ctx = new DrawContext();
   const height = 600 * graphic.size.height / graphic.size.width;
   ctx.size = new Size(600, height);
@@ -381,7 +381,7 @@ function timelineMarker(graphic, time) {
   const [hour, minute] = time.split(":").map(Number);
   const x = timelineX((hour + minute / 60) / 24);
   ctx.setFillColor(new Color("FFFFFF"));
-  ctx.fillRect(new Rect(x - 1.5, 0, 3, height - 10));
+  ctx.fillRect(new Rect(x - 1.5, 0, 3, height - rulerHeight));
   return ctx.getImage();
 }
 
@@ -782,7 +782,13 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   host.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
   const p = kyivParts(now);
   const usable = data && data.date === p.date && !error;
-  const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextDayCells(data)) : null;
+  const nextCells = usable && !data.emergency ? nextDayCells(data) : null;
+  const view = usable && !data.emergency ? eventView(data.cells, p.slot, nextCells) : null;
+  const showTomorrow = view && !small && nextCells;
+  if (view && !small && !nextCells) {
+    const nextHour = (Math.floor(now / 3600000) + 1) * 3600000;
+    host.refreshAfterDate = new Date(Math.min(host.refreshAfterDate.getTime(), nextHour));
+  }
   const statusColor = view?.state === "on" ? green : view?.state === "off" ? red : amber;
   if (small && view) {
     widget.setPadding(0, 0, 0, 0);
@@ -825,6 +831,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   }
   const clearMessage = view && view.clearToday && !/^\d{2}:\d{2}$/.test(view.value);
   if (small) widget.setPadding(12, 13, 12, 13);
+  else if (showTomorrow) widget.setPadding(compact ? 3 : 8, 16, compact ? 3 : 8, 16);
   else widget.setPadding((clearMessage ? 16 : 12) - verticalInset, 16, 16 - verticalInset, 16);
   const header = widget.addStack();
   header.topAlignContent();
@@ -838,7 +845,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     addText(metadata, `${group} група`, 10, muted);
     metadata.addSpacer();
     if (view) addCheckedTime(metadata, data.checkedAt, muted);
-    widget.addSpacer(clearMessage ? 8 : 2);
+    widget.addSpacer(showTomorrow ? 2 : clearMessage ? 8 : 2);
   }
   if (view && !clearMessage) widget.addSpacer();
   if (!usable) {
@@ -870,8 +877,8 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     const main = widget.addStack();
     main.centerAlignContent();
     main.addSpacer();
-    const timeSize = notices.length ? 29 : 36;
-    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : clearMessage ? 26 : 22, ink, true);
+    const timeSize = showTomorrow ? compact ? 24 : 30 : notices.length ? 29 : 36;
+    addText(main, view.value, /^\d{2}:\d{2}$/.test(view.value) ? timeSize : clearMessage && !showTomorrow ? 26 : 22, ink, true);
     if (/^\d{2}:\d{2}$/.test(view.detail)) {
       main.addSpacer(timeGap);
       addText(main, "—", 22, muted);
@@ -880,7 +887,7 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     }
     main.addSpacer();
     const subtitle = view.following || (/^\d{2}:\d{2}$/.test(view.detail) ? "" : view.detail);
-    if (subtitle) {
+    if (subtitle && !showTomorrow) {
       widget.addSpacer(3);
       const following = widget.addStack();
       following.addSpacer();
@@ -894,8 +901,9 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   if (notices.length) addText(widget, notices.join(" · "), 10, amber).lineLimit = 2;
   if (!view && !small) addCheckedTime(widget, data.checkedAt, muted);
   if (view) {
-    widget.addSpacer(4);
-    const graphic = timelineGraphic(data.cells, p.time);
+    if (!showTomorrow) widget.addSpacer(4);
+    if (showTomorrow) addText(widget, "Сьогодні", 9, muted);
+    const graphic = showTomorrow ? timeline(data.cells) : timelineGraphic(data.cells, p.time);
     const chart = widget.addStack();
     const displayWidth = surfaceWidth - 32;
     // Both layers must share one frame; a flexible spacer shifted the marker relative to the bar.
@@ -903,18 +911,25 @@ function makeWidget(data, group, now, error = "", settings = {}) {
     chart.setPadding(0, 0, 0, 0);
     chart.backgroundImage = graphic;
     // Tint stays dynamic after rendering; DrawContext would freeze the marker color.
-    const marker = chart.addImage(timelineMarker(graphic, p.time));
+    const marker = chart.addImage(timelineMarker(graphic, p.time, showTomorrow ? 0 : undefined));
     marker.resizable = true;
     marker.imageSize = chart.size;
     marker.tintColor = themeColor("000000", "F6F7FB");
     marker.applyFittingContentMode();
+    if (showTomorrow) {
+      addText(widget, "Завтра", 9, muted);
+      const nextGraphic = timelineGraphic(nextCells);
+      const nextChart = widget.addImage(nextGraphic);
+      nextChart.imageSize = new Size(displayWidth, displayWidth * nextGraphic.size.height / nextGraphic.size.width);
+      nextChart.applyFittingContentMode();
+    }
     const ticks = widget.addStack();
     ticks.size = new Size(displayWidth, 0);
     ticks.setPadding(0, 0, 0, 0);
     const axisFont = 12;
     ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"].forEach((time, i) => {
       if (i) ticks.addSpacer();
-      let label = displayTimes(time).replace(/[:.][0٠۰]{2}(?![0-9٠-٩۰-۹])/u, "");
+      let label = showTomorrow ? time.slice(0, 2) : displayTimes(time).replace(/[:.][0٠۰]{2}(?![0-9٠-٩۰-۹])/u, "");
       if (i === 8 && /^\p{Number}+$/u.test(label)) label = "24";
       label = label.match(/\p{Number}+/u)?.[0] || label;
       addText(ticks, label, axisFont, muted);
