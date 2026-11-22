@@ -66,6 +66,70 @@ final class Schedule {
         return prefix + cells;
     }
 
+    static int runEnd(String cells, int start) {
+        int end = start + 1;
+        while (end < cells.length() && cells.charAt(end) == cells.charAt(start)) end++;
+        return end;
+    }
+
+    static void describeChange(List<String> changes, String old, String current, int start, boolean today) {
+        String label = today ? "Сьогодні" : "Завтра";
+        if (current.equals("emergency")) {
+            changes.add(label + " · аварійні відключення. Час заживлення невідомий.");
+            return;
+        }
+        if (current.substring(start).matches("[+]+") && !(old.length() == 48 && old.substring(start).equals(current.substring(start)))) {
+            changes.add(today ? "До кінця дня відключень не планують." : "Завтра без планових відключень.");
+            return;
+        }
+        if (old.length() != 48) {
+            String action = old.equals("emergency") ? "Плановий графік відновлено." : "Опубліковано графік.";
+            int off = current.indexOf("-", start);
+            changes.add(label + " · " + action + (off < 0 ? "" : " Відключення за графіком: " + clock(off) + "–" + clock(runEnd(current, off)) + "."));
+            return;
+        }
+        String previous = old.substring(start);
+        String updated = current.substring(start);
+        if (previous.matches("[+]*-+[+]*") && updated.matches("[+]*-+[+]*")) {
+            int oldStart = start + previous.indexOf("-");
+            int newStart = start + updated.indexOf("-");
+            int oldEnd = runEnd(old, oldStart);
+            int newEnd = runEnd(current, newStart);
+            if (oldStart != newStart && oldEnd != newEnd && oldStart > start && newStart > start) {
+                changes.add(label + " · Відключення перенесли на " + clock(newStart) + "–" + clock(newEnd) + ". Було " + clock(oldStart) + "–" + clock(oldEnd) + ".");
+                return;
+            }
+        }
+        for (int i = start; i < 48;) {
+            String was = old.substring(i, i + 1);
+            String now = current.substring(i, i + 1);
+            if (was.equals(now)) { i++; continue; }
+            int end = Math.min(runEnd(old, i), runEnd(current, i));
+            boolean boundary = i == 0 || old.charAt(i - 1) != old.charAt(i) || current.charAt(i - 1) != current.charAt(i);
+            String range = clock(i) + "–" + clock(end);
+            String detail;
+            if (boundary && was.equals("-") && now.equals("+") && end < 48 && old.charAt(end) == '+' && i > 0 && old.charAt(i - 1) == '-' && current.charAt(i - 1) == '-') {
+                detail = "Світло повернеться раніше: о " + clock(i) + " замість " + clock(end) + ".";
+            } else if (boundary && was.equals("+") && now.equals("-") && i > 0 && old.charAt(i - 1) == '-' && current.charAt(i - 1) == '-' && end < 48 && current.charAt(end) == '+') {
+                detail = "Світло повернеться пізніше: о " + clock(end) + " замість " + clock(i) + ".";
+            } else if (boundary && was.equals("-") && now.equals("+") && end < 48 && current.charAt(end) == '-' && (i == 0 || old.charAt(i - 1) != '-')) {
+                detail = "Відключення почнеться пізніше: о " + clock(end) + " замість " + clock(i) + ".";
+            } else if (boundary && was.equals("+") && now.equals("-") && end < 48 && old.charAt(end) == '-' && (i == 0 || current.charAt(i - 1) != '-')) {
+                detail = "Відключення почнеться раніше: о " + clock(i) + " замість " + clock(end) + ".";
+            } else if (now.equals("+")) {
+                detail = range + " має бути світло." + (was.equals("-") ? " Відключення на цей час скасовано." : "");
+            } else if (now.equals("-")) {
+                detail = range + " заплановано відключення.";
+            } else if (now.equals("~")) {
+                detail = range + " можливе заживлення.";
+            } else {
+                detail = range + " поки немає даних.";
+            }
+            changes.add(label + " · " + detail);
+            i = end;
+        }
+    }
+
     static final class Event {
         final char state;
         final int start;

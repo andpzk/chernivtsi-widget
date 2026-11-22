@@ -8,6 +8,14 @@ import java.util.Arrays;
 
 public final class ScheduleCheck {
     public static void main(String[] files) throws Exception {
+        Path cases = Path.of(files[0]).resolveSibling("notification-changes.tsv");
+        for (String line : Files.readAllLines(cases)) {
+            String[] fields = line.split("\t", -1);
+            java.util.List<String> changes = new java.util.ArrayList<>();
+            Schedule.describeChange(changes, fields[0], fields[1], Integer.parseInt(fields[2]), fields[3].equals("1"));
+            assert changes.size() == Integer.parseInt(fields[4]) : changes;
+            assert changes.isEmpty() || changes.get(0).contains(fields[5]) : changes;
+        }
         Instant evening = Instant.parse("2026-11-07T21:30:00Z");
         LocalDate date = Schedule.kyiv(evening).toLocalDate();
         assert date.equals(LocalDate.of(2026, 11, 7));

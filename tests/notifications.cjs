@@ -20,6 +20,14 @@ const day = (date = '2026-11-22', state = 'on') => ({date, cells: Array(48).fill
 const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, group, at);
 
 (async () => {
+  for (const line of fs.readFileSync(path.join(__dirname, 'fixtures/notification-changes.tsv'), 'utf8').trimEnd().split(/\r?\n/)) {
+    const [old, current, slot, today, count, detail] = line.split('\t');
+    const changes = [];
+    ctx.describeChange(changes, old, current, Number(slot), today === '1');
+    assert.equal(changes.length, Number(count));
+    if (changes.length) assert.ok(changes[0].includes(detail), changes[0]);
+  }
+
   const data = day();
   await notify(data);
   assert.equal(sent.length, 0, 'First successful read establishes a baseline silently');
@@ -28,7 +36,8 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
   data.cells[36] = 'off';
   await notify(data);
   assert.equal(sent.length, 1);
-  assert.match(sent[0].body, /група 12.*22\.11\.2026/);
+  assert.match(sent[0].title, /Група 12/);
+  assert.match(sent[0].body, /Сьогодні.*18:00–18:30.*відключення/);
   assert.equal(new URL(sent[0].openURL).searchParams.get('group'), '12');
   await notify(data);
   assert.equal(sent.length, 1, 'Repeated refreshes do not repeat a notification');
