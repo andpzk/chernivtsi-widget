@@ -992,7 +992,41 @@ function makeWidget(data, group, now, error = "", settings = {}) {
   return host;
 }
 
+async function offerNotificationTest() {
+  const fm = FileManager.local();
+  const marker = fm.joinPath(fm.documentsDirectory(), "chernivtsi-notification-test-v1.txt");
+  if (fm.fileExists(marker)) return;
+  const prompt = new Alert();
+  prompt.title = "Сповіщення про зміни графіка";
+  prompt.message = "Щоб перевірити доставку, дозволь сповіщення, якщо iOS запитає, і заблокуй iPhone. Тестове повідомлення має з’явитися через хвилину.";
+  prompt.addAction("Перевірити сповіщення");
+  prompt.addCancelAction("Пропустити");
+  if (await prompt.presentAlert() === 0) {
+    const test = new Notification();
+    test.title = "⚡ Тестове сповіщення";
+    test.body = "Сповіщення від віджета «Чернівці Світло» доставлено.";
+    test.sound = "default";
+    test.setTriggerDate(new Date(Date.now() + 60000));
+    try {
+      await test.schedule();
+    } catch (error) {
+      console.log(`Notification test: ${error.message}`);
+      const help = new Alert();
+      help.title = "Не вдалося запланувати сповіщення";
+      help.message = "Перевір дозвіл у Параметри → Сповіщення → Scriptable та ввімкни показ на замкненому екрані. Запусти скрипт знову, щоб повторити тест.";
+      help.addAction("Гаразд");
+      await help.presentAlert();
+      return;
+    }
+  }
+  fm.writeString(marker, "1");
+}
+
 async function buildWidget(settings = {}) {
+  if (config.runsInApp) {
+    try { await offerNotificationTest(); }
+    catch (error) { console.log(`Notification setup: ${error.message}`); }
+  }
   const rawGroup = args.widgetParameter || (args.queryParameters && args.queryParameters.group) || settings.group || DEFAULT_GROUP;
   const group = Number(rawGroup);
   const now = Date.now();

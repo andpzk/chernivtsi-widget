@@ -71,7 +71,32 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
   vm.runInContext(`args = {widgetParameter: '8'};
     getSchedule = async () => ({date: kyivParts(Date.now()).date, cells: Array(48).fill('on'), source: 'official', emergency: false});
     makeWidget = () => ({refreshAfterDate: new Date(Date.now() + 86400000)});`, ctx);
+  ctx.config = {runsInApp: false};
+  let prompts = 0, choice = 0;
+  ctx.Alert = class {
+    addAction() {} addCancelAction() {}
+    async presentAlert() { prompts++; return choice; }
+  };
+  ctx.Notification.prototype.setTriggerDate = function(date) { this.trigger = date.getTime(); };
   const widget = await ctx.module.exports.build();
+  assert.equal(prompts, 0);
+  ctx.config.runsInApp = true;
+  denied = true;
+  await ctx.module.exports.build();
+  assert.equal(prompts, 2, 'A scheduling error shows recovery instructions');
+  denied = false;
+  const started = Date.now();
+  await ctx.module.exports.build();
+  assert.ok(sent.at(-1).trigger >= started + 60000 && sent.at(-1).trigger <= Date.now() + 60000);
+  const count = sent.length;
+  await ctx.module.exports.build();
+  assert.equal(prompts, 3, 'Successful test is offered once');
+  files.delete('/cache/chernivtsi-notification-test-v1.txt');
+  choice = -1;
+  await ctx.module.exports.build();
+  await ctx.module.exports.build();
+  assert.equal(prompts, 4, 'Skipping dismisses future offers');
+  assert.equal(sent.length, count, 'Skipping does not schedule a notification');
   assert.ok(widget.refreshAfterDate.getTime() <= Date.now() + 30 * 60000);
   assert.ok(files.has('/cache/chernivtsi-notifications-official-8.json'));
   console.log('PASS: notifications baseline, changes, deduplication, cache/fallback, tomorrow, midnight, emergencies, groups, failures and build integration.');
