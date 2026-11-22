@@ -65,7 +65,7 @@ final class ScheduleStore {
             write(edit, group, "tomorrow", pair.tomorrow);
             String key = "alert." + group + ".";
             boolean initialized = prefs.contains(key + "ready");
-            StringBuilder dates = new StringBuilder();
+            List<String> changes = new ArrayList<>();
             for (Schedule.Day day : new Schedule.Day[]{today, today != null && today.emergency ? null : future}) {
                 if (day == null) continue;
                 // Two alternating slots keep yesterday's "tomorrow" across midnight.
@@ -73,12 +73,19 @@ final class ScheduleStore {
                 String old = prefs.getString(slot, "");
                 String value = Schedule.notificationState(day, old);
                 if (initialized && !old.equals(value)) {
-                    if (dates.length() > 0) dates.append(", ");
-                    dates.append(day.date.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")));
+                    String prefix = day.date + "|";
+                    boolean todayChanged = day.date.equals(date);
+                    int firstSlot = todayChanged ? Schedule.kyiv(now).toLocalTime().toSecondOfDay() / 1800 : 0;
+                    Schedule.describeChange(changes, old.startsWith(prefix) ? old.substring(prefix.length()) : "",
+                            value.substring(prefix.length()), firstSlot, todayChanged);
                 }
                 edit.putString(slot, value).putBoolean(key + "ready", true);
             }
-            if (dates.length() > 0) ScheduleAlerts.show(context, group, "Група " + group + " · графік оновлено", "Зміни за " + dates);
+            if (!changes.isEmpty()) {
+                String body = changes.get(0);
+                if (changes.size() > 1) body += " Інші зміни у віджеті: " + (changes.size() - 1) + ".";
+                ScheduleAlerts.show(context, group, "Група " + group + " · зміна графіка", body);
+            }
         }
         if (!Thread.currentThread().isInterrupted()) edit.apply();
     }

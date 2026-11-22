@@ -26,6 +26,6 @@ final class ScheduleAlerts {
         PendingIntent open = PendingIntent.getActivity(context, 0, new Intent(context, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         manager.notify(id, new Notification.Builder(context, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(title).setContentText(body)
-                .setContentIntent(open).setAutoCancel(true).build());
+                .setStyle(new Notification.BigTextStyle().bigText(body)).setContentIntent(open).setAutoCancel(true).build());
     }
 }

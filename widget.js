@@ -198,6 +198,70 @@ async function getSchedule(group, now) {
   return data;
 }
 
+function runEnd(cells, start) {
+  let end = start + 1;
+  while (end < cells.length && cells[end] === cells[start]) end++;
+  return end;
+}
+
+function describeChange(changes, old, current, start, today) {
+  const label = today ? "Сьогодні" : "Завтра";
+  if (current === "emergency") {
+    changes.push(label + " · аварійні відключення. Час заживлення невідомий.");
+    return;
+  }
+  if (/^[+]+$/.test(current.substring(start)) && !(old.length === 48 && old.substring(start) === current.substring(start))) {
+    changes.push(today ? "До кінця дня відключень не планують." : "Завтра без планових відключень.");
+    return;
+  }
+  if (old.length !== 48) {
+    const action = old === "emergency" ? "Плановий графік відновлено." : "Опубліковано графік.";
+    const off = current.indexOf("-", start);
+    changes.push(label + " · " + action + (off < 0 ? "" : " Відключення за графіком: " + clock(off) + "–" + clock(runEnd(current, off)) + "."));
+    return;
+  }
+  const previous = old.substring(start);
+  const updated = current.substring(start);
+  if (/^[+]*-+[+]*$/.test(previous) && /^[+]*-+[+]*$/.test(updated)) {
+    const oldStart = start + previous.indexOf("-");
+    const newStart = start + updated.indexOf("-");
+    const oldEnd = runEnd(old, oldStart);
+    const newEnd = runEnd(current, newStart);
+    if (oldStart !== newStart && oldEnd !== newEnd && oldStart > start && newStart > start) {
+      changes.push(label + " · Відключення перенесли на " + clock(newStart) + "–" + clock(newEnd) + ". Було " + clock(oldStart) + "–" + clock(oldEnd) + ".");
+      return;
+    }
+  }
+  for (let i = start; i < 48;) {
+    const was = old.substring(i, i + 1);
+    const now = current.substring(i, i + 1);
+    if (was === now) { i++; continue; }
+    const end = Math.min(runEnd(old, i), runEnd(current, i));
+    const boundary = i === 0 || old.charAt(i - 1) !== old.charAt(i) || current.charAt(i - 1) !== current.charAt(i);
+    const range = clock(i) + "–" + clock(end);
+    let detail;
+    if (boundary && was === "-" && now === "+" && end < 48 && old.charAt(end) === '+' && i > 0 && old.charAt(i - 1) === '-' && current.charAt(i - 1) === '-') {
+      detail = "Світло повернеться раніше: о " + clock(i) + " замість " + clock(end) + ".";
+    } else if (boundary && was === "+" && now === "-" && i > 0 && old.charAt(i - 1) === '-' && current.charAt(i - 1) === '-' && end < 48 && current.charAt(end) === '+') {
+      detail = "Світло повернеться пізніше: о " + clock(end) + " замість " + clock(i) + ".";
+    } else if (boundary && was === "-" && now === "+" && end < 48 && current.charAt(end) === '-' && (i === 0 || old.charAt(i - 1) !== '-')) {
+      detail = "Відключення почнеться пізніше: о " + clock(end) + " замість " + clock(i) + ".";
+    } else if (boundary && was === "+" && now === "-" && end < 48 && old.charAt(end) === '-' && (i === 0 || current.charAt(i - 1) !== '-')) {
+      detail = "Відключення почнеться раніше: о " + clock(i) + " замість " + clock(end) + ".";
+    } else if (now === "+") {
+      detail = range + " має бути світло." + (was === "-" ? " Відключення на цей час скасовано." : "");
+    } else if (now === "-") {
+      detail = range + " заплановано відключення.";
+    } else if (now === "~") {
+      detail = range + " можливе заживлення.";
+    } else {
+      detail = range + " поки немає даних.";
+    }
+    changes.push(label + " · " + detail);
+    i = end;
+  }
+}
+
 async function notifyScheduleChange(data, group, now) {
   if (!data) return;
   try {
@@ -230,15 +294,19 @@ async function notifyScheduleChange(data, group, now) {
       const cells = day.cells.map((cell, i) => day.date === today
         && i < slot && cell === "unknown" && before ? before.cells[i] : cell);
       const snapshot = {emergency: !!day.emergency, cells};
-      if (JSON.stringify(before) !== JSON.stringify(snapshot)) changes.push(day.date.split("-").reverse().join("."));
+      const encode = entry => entry.emergency ? "emergency" : entry.cells.map(cell =>
+        ({on: "+", off: "-", possible: "~", unknown: "?"})[cell]).join("");
+      const old = before ? encode(before) : "";
+      const current = encode(snapshot);
+      if (old !== current) describeChange(changes, old, current, day.date === today ? slot : 0, day.date === today);
       next[day.date] = snapshot;
     }
     if (!fresh) return;
     if (Object.keys(previous).length && changes.length) {
       const notification = new Notification();
       notification.identifier = `chernivtsi-schedule-${key}`;
-      notification.title = "⚡ Графік світла оновлено";
-      notification.body = `Чернівці · група ${group}. Оновлено дані за ${changes.join(", ")}. Перегляньте графік.`;
+      notification.title = `Група ${group} · зміна графіка`;
+      notification.body = changes[0] + (changes.length > 1 ? ` Інші зміни у віджеті: ${changes.length - 1}.` : "");
       notification.sound = "default";
       notification.openURL = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
       await notification.schedule();
