@@ -21,8 +21,10 @@ import javax.net.ssl.HttpsURLConnection;
 final class ScheduleStore {
     private static final String TAG = "ChernivtsiSchedule";
     private final SharedPreferences prefs;
+    private final Context context;
 
     ScheduleStore(Context context) {
+        this.context = context;
         prefs = context.getSharedPreferences("schedules", Context.MODE_PRIVATE);
     }
 
@@ -61,6 +63,22 @@ final class ScheduleStore {
             Schedule.Pair pair = Schedule.select(today, future, community, savedToday, savedTomorrow, next != null, date);
             write(edit, group, "today", pair.today);
             write(edit, group, "tomorrow", pair.tomorrow);
+            String key = "alert." + group + ".";
+            boolean initialized = prefs.contains(key + "ready");
+            StringBuilder dates = new StringBuilder();
+            for (Schedule.Day day : new Schedule.Day[]{today, today != null && today.emergency ? null : future}) {
+                if (day == null) continue;
+                // Two alternating slots keep yesterday's "tomorrow" across midnight.
+                String slot = key + day.date.toEpochDay() % 2;
+                String old = prefs.getString(slot, "");
+                String value = Schedule.notificationState(day, old);
+                if (initialized && !old.equals(value)) {
+                    if (dates.length() > 0) dates.append(", ");
+                    dates.append(day.date.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")));
+                }
+                edit.putString(slot, value).putBoolean(key + "ready", true);
+            }
+            if (dates.length() > 0) ScheduleAlerts.show(context, group, "Група " + group + " · графік оновлено", "Зміни за " + dates);
         }
         if (!Thread.currentThread().isInterrupted()) edit.apply();
     }

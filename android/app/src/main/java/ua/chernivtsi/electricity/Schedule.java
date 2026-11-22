@@ -53,6 +53,19 @@ final class Schedule {
         }
     }
 
+    static String notificationState(Day day, String previous) {
+        String prefix = day.date + "|";
+        if (day.emergency) return prefix + "emergency";
+        String cells = day.cells;
+        // The operator sometimes omits the elapsed part of the day.
+        int first = 0;
+        while (first < cells.length() && cells.charAt(first) == '?') first++;
+        if (previous.startsWith(prefix) && previous.length() == prefix.length() + cells.length()) {
+            cells = previous.substring(prefix.length(), prefix.length() + first) + cells.substring(first);
+        }
+        return prefix + cells;
+    }
+
     static final class Event {
         final char state;
         final int start;
