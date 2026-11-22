@@ -60,6 +60,7 @@ public final class RefreshService extends JobService {
                 if (!groups.isEmpty()) {
                     new DesignStore(this).refresh();
                     new ScheduleStore(this).refresh(groups);
+                    if (!Thread.currentThread().isInterrupted()) ReleaseUpdates.check(this, true);
                 }
             } catch (RuntimeException e) {
                 Log.w("ChernivtsiSchedule", "Widget refresh failed", e);
