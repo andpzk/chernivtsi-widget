@@ -22,6 +22,15 @@ public final class ScheduleCheck {
         assert Schedule.official(first.replace("<u>з</u>", "<u>?</u>"), 12, date, evening) == null;
         Schedule.Day tomorrow = Schedule.official(second, 12, date.plusDays(1), evening);
         assert tomorrow != null && tomorrow.cells.length() == 48;
+        String baseline = Schedule.notificationState(group12, "");
+        assert baseline.equals(Schedule.notificationState(group12, baseline));
+        Schedule.Day cropped = new Schedule.Day(date, "??" + group12.cells.substring(2), evening, evening, false, true);
+        assert baseline.equals(Schedule.notificationState(cropped, baseline));
+        assert !baseline.equals(Schedule.notificationState(group1, baseline));
+        assert !baseline.equals(Schedule.notificationState(tomorrow, baseline));
+        Schedule.Day notificationEmergency = new Schedule.Day(date, Schedule.UNKNOWN, evening, evening, true, true);
+        assert !baseline.equals(Schedule.notificationState(notificationEmergency, baseline));
+        assert baseline.equals(Schedule.notificationState(group12, Schedule.notificationState(notificationEmergency, baseline)));
 
         Schedule.Pair live = Schedule.select(group12, tomorrow, null, null, null, true, date);
         assert live.today == group12 && live.tomorrow == tomorrow;
