@@ -34,6 +34,7 @@ final class ScheduleStore {
     }
 
     void refresh(Iterable<Integer> groups) {
+        NotificationCopy copy = new DesignStore(context).copy();
         String main = download(Schedule.OFFICIAL_URL);
         String next = download(Schedule.OFFICIAL_URL + "?next");
         Instant now = Instant.now();
@@ -77,7 +78,7 @@ final class ScheduleStore {
                     boolean todayChanged = day.date.equals(date);
                     int firstSlot = todayChanged ? Schedule.kyiv(now).toLocalTime().toSecondOfDay() / 1800 : 0;
                     boolean includePublication = !todayChanged && !old.startsWith(prefix) && !changes.isEmpty();
-                    Schedule.describeChange(changes, old.startsWith(prefix) ? old.substring(prefix.length()) : "",
+                    Schedule.describeChange(copy, changes, old.startsWith(prefix) ? old.substring(prefix.length()) : "",
                             value.substring(prefix.length()), firstSlot, todayChanged);
                     if (includePublication) {
                         String publication = changes.remove(changes.size() - 1);
@@ -88,8 +89,8 @@ final class ScheduleStore {
             }
             if (!changes.isEmpty()) {
                 String body = changes.get(0);
-                if (changes.size() > 1) body += " Інші зміни у віджеті: " + (changes.size() - 1) + ".";
-                ScheduleAlerts.show(context, group, "Група " + group + " · зміна графіка", body);
+                if (changes.size() > 1) body += " " + copy.text("extra", String.valueOf(changes.size() - 1));
+                ScheduleAlerts.show(context, group, copy.text("groupTitle", String.valueOf(group)), body);
             }
         }
         if (!Thread.currentThread().isInterrupted()) edit.apply();

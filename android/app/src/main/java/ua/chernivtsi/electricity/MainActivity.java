@@ -61,7 +61,8 @@ public final class MainActivity extends Activity {
             startActivity(new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName())
                     .putExtra(Settings.EXTRA_CHANNEL_ID, ScheduleAlerts.CHANNEL));
         } else {
-            ScheduleAlerts.show(this, 0, "Тестове сповіщення", "Чернівці Світло");
+            NotificationCopy copy = new DesignStore(this).copy();
+            ScheduleAlerts.show(this, 0, copy.text("testTitle"), copy.text("testBody"));
         }
     }
 
