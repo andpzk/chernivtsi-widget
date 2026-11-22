@@ -12,6 +12,7 @@ jobs:
       - run: node tests/appearance.cjs
       - run: node tests/lock-screen.cjs
       - run: node tests/tomorrow.cjs
+      - run: node tests/notifications.cjs
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

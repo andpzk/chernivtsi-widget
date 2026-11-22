@@ -198,6 +198,55 @@ async function getSchedule(group, now) {
   return data;
 }
 
+async function notifyScheduleChange(data, group, now) {
+  if (!data) return;
+  try {
+    const fm = FileManager.local();
+    const key = `official-${group}`;
+    const path = fm.joinPath(fm.documentsDirectory(), `chernivtsi-notifications-${key}.json`);
+    let previous = {};
+    try {
+      if (fm.fileExists(path)) {
+        const saved = JSON.parse(fm.readString(path));
+        if (saved && typeof saved === "object" && !Array.isArray(saved)
+            && Object.values(saved).every(day => typeof day.emergency === "boolean"
+              && Array.isArray(day.cells) && day.cells.length === 48
+              && day.cells.every(cell => Object.prototype.hasOwnProperty.call(COLORS, cell)))) previous = saved;
+      }
+    } catch (e) { console.log(`Notification state: ${e.message}`); }
+    const {date: today, slot} = kyivParts(now);
+    const tomorrow = shiftDate(today, 1);
+    const next = Object.fromEntries(Object.entries(previous).filter(([date]) => date >= today && date <= tomorrow));
+    const changes = [];
+    let fresh = false;
+    for (const day of [data, data.tomorrow]) {
+      if (!day || day.cached || day.source !== "official"
+          || ![today, tomorrow].includes(day.date) || !Array.isArray(day.cells)
+          || day.cells.length !== 48 || !day.cells.every(cell => Object.prototype.hasOwnProperty.call(COLORS, cell))
+          || (!day.emergency && day.cells.every(cell => cell === "unknown"))) continue;
+      fresh = true;
+      const before = previous[day.date];
+      // The official page may omit elapsed hours; that is not a schedule revision.
+      const cells = day.cells.map((cell, i) => day.date === today
+        && i < slot && cell === "unknown" && before ? before.cells[i] : cell);
+      const snapshot = {emergency: !!day.emergency, cells};
+      if (JSON.stringify(before) !== JSON.stringify(snapshot)) changes.push(day.date.split("-").reverse().join("."));
+      next[day.date] = snapshot;
+    }
+    if (!fresh) return;
+    if (Object.keys(previous).length && changes.length) {
+      const notification = new Notification();
+      notification.identifier = `chernivtsi-schedule-${key}`;
+      notification.title = "⚡ Графік світла оновлено";
+      notification.body = `Чернівці · група ${group}. Оновлено дані за ${changes.join(", ")}. Перегляньте графік.`;
+      notification.sound = "default";
+      notification.openURL = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
+      await notification.schedule();
+    }
+    fm.writeString(path, JSON.stringify(next));
+  } catch (e) { console.log(`Schedule notification: ${e.message}`); }
+}
+
 function nextDayCells(data) {
   const day = data && data.tomorrow;
   return day && !day.emergency && day.date === shiftDate(data.date, 1)
@@ -954,6 +1003,8 @@ async function buildWidget(settings = {}) {
     catch (e) { console.log(e.message); error = "Не вдалося прочитати дані"; }
   }
   const widget = makeWidget(data, Number.isInteger(group) ? group : "?", Date.now(), error, settings);
+  widget.refreshAfterDate = new Date(Math.min(widget.refreshAfterDate.getTime(), now + 30 * 60000));
+  await notifyScheduleChange(data, group, now);
   return widget;
 }
 

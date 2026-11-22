@@ -217,8 +217,8 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
   if(family==='medium' && group==='12'){
     const nextHour=Math.floor(FixedDate.now()/3600000)*3600000+3600000;
     const scheduled=ctx.nextRefreshAt(cache,FixedDate.now());
-    assert.equal(host.refreshAfterDate.getTime(),tomorrow?scheduled:Math.min(nextHour,scheduled),
-      'Check for publication before midnight while the medium widget has no tomorrow data');
+    assert.equal(host.refreshAfterDate.getTime(),Math.min(FixedDate.now()+30*60000,tomorrow?scheduled:Math.min(nextHour,scheduled)),
+      'Request a schedule check within 30 minutes, preserving earlier timeline updates');
   }
   if(clearEvening){
     assert.equal(texts.find(t=>t.text==='Без відключень').font.size,26);
