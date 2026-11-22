@@ -27,6 +27,18 @@ public final class MainActivity extends Activity {
         scroll.addView(page);
         setContentView(scroll);
         add(page, "Чернівці Світло", 28, true, 16);
+        Button update = new Button(this);
+        update.setVisibility(android.view.View.GONE);
+        page.addView(update);
+        new Thread(() -> {
+            String version = ReleaseUpdates.check(getApplicationContext(), false);
+            runOnUiThread(() -> {
+                if (isDestroyed() || isFinishing() || version.isEmpty()) return;
+                update.setText("Оновити до " + version);
+                update.setVisibility(android.view.View.VISIBLE);
+                update.setOnClickListener(v -> startActivity(ReleaseUpdates.download(version)));
+            });
+        }, "release-check").start();
         add(page, "Затисніть порожнє місце на головному екрані та відкрийте меню «Віджети». Знайдіть «Чернівці Світло», виберіть кільце або широкий графік і вкажіть свою групу.", 16, false, 16);
         add(page, "Торкніться віджета, щоб оновити графік або змінити його групу.", 16, false, 22);
         add(page, "Зелений — є світло\nЧервоний — відключення\nЖовтий — можливе заживлення\nСірий — немає даних", 15, false, 16);
