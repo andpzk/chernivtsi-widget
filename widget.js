@@ -298,7 +298,11 @@ async function notifyScheduleChange(data, group, now) {
         ({on: "+", off: "-", possible: "~", unknown: "?"})[cell]).join("");
       const old = before ? encode(before) : "";
       const current = encode(snapshot);
-      if (old !== current) describeChange(changes, old, current, day.date === today ? slot : 0, day.date === today);
+      if (old !== current) {
+        const includePublication = day.date === tomorrow && !before && changes.length > 0;
+        describeChange(changes, old, current, day.date === today ? slot : 0, day.date === today);
+        if (includePublication) changes[0] += "\n" + changes.pop();
+      }
       next[day.date] = snapshot;
     }
     if (!fresh) return;

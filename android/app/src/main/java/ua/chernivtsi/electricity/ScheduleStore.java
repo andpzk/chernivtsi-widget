@@ -76,8 +76,13 @@ final class ScheduleStore {
                     String prefix = day.date + "|";
                     boolean todayChanged = day.date.equals(date);
                     int firstSlot = todayChanged ? Schedule.kyiv(now).toLocalTime().toSecondOfDay() / 1800 : 0;
+                    boolean includePublication = !todayChanged && !old.startsWith(prefix) && !changes.isEmpty();
                     Schedule.describeChange(changes, old.startsWith(prefix) ? old.substring(prefix.length()) : "",
                             value.substring(prefix.length()), firstSlot, todayChanged);
+                    if (includePublication) {
+                        String publication = changes.remove(changes.size() - 1);
+                        changes.set(0, changes.get(0) + "\n" + publication);
+                    }
                 }
                 edit.putString(slot, value).putBoolean(key + "ready", true);
             }

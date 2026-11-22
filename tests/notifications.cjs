@@ -49,7 +49,9 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
   await notify({...data, cells: data.cells.map((v,i) => i < 30 ? 'unknown' : v)});
   assert.equal(sent.length, 1, 'Omitted elapsed hours do not cause false alerts');
   const tomorrow = day('2026-11-23', 'off');
+  data.cells[36] = 'on';
   await notify({...data, tomorrow});
+  assert.match(sent.at(-1).body, /До кінця дня.*\nЗавтра.*Опубліковано графік.*00:00–24:00/);
   assert.equal(sent.length, 2, 'Publication of tomorrow is a change');
   await notify(data);
   await notify({...data, tomorrow});
