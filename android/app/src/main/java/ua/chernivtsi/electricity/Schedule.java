@@ -72,20 +72,21 @@ final class Schedule {
         return end;
     }
 
-    static void describeChange(List<String> changes, String old, String current, int start, boolean today) {
-        String label = today ? "Сьогодні" : "Завтра";
+    static void describeChange(NotificationCopy copy, List<String> changes, String old, String current, int start, boolean today) {
+        String label = copy.text(today ? "today" : "tomorrow");
         if (current.equals("emergency")) {
-            changes.add(label + " · аварійні відключення. Час заживлення невідомий.");
+            changes.add(copy.text("dated", label, copy.text("emergency")));
             return;
         }
         if (current.substring(start).matches("[+]+") && !(old.length() == 48 && old.substring(start).equals(current.substring(start)))) {
-            changes.add(today ? "До кінця дня відключень не планують." : "Завтра без планових відключень.");
+            changes.add(copy.text(today ? "clearToday" : "clearTomorrow"));
             return;
         }
         if (old.length() != 48) {
-            String action = old.equals("emergency") ? "Плановий графік відновлено." : "Опубліковано графік.";
+            String action = copy.text(old.equals("emergency") ? "restored" : "published");
             int off = current.indexOf("-", start);
-            changes.add(label + " · " + action + (off < 0 ? "" : " Відключення за графіком: " + clock(off) + "–" + clock(runEnd(current, off)) + "."));
+            if (off >= 0) action += " " + copy.text("firstOutage", clock(off), clock(runEnd(current, off)));
+            changes.add(copy.text("dated", label, action));
             return;
         }
         String previous = old.substring(start);
@@ -96,7 +97,7 @@ final class Schedule {
             int oldEnd = runEnd(old, oldStart);
             int newEnd = runEnd(current, newStart);
             if (oldStart != newStart && oldEnd != newEnd && oldStart > start && newStart > start) {
-                changes.add(label + " · Відключення перенесли на " + clock(newStart) + "–" + clock(newEnd) + ". Було " + clock(oldStart) + "–" + clock(oldEnd) + ".");
+                changes.add(copy.text("dated", label, copy.text("moved", clock(newStart), clock(newEnd), clock(oldStart), clock(oldEnd))));
                 return;
             }
         }
@@ -109,23 +110,23 @@ final class Schedule {
             String range = clock(i) + "–" + clock(end);
             String detail;
             if (boundary && was.equals("-") && now.equals("+") && end < 48 && old.charAt(end) == '+' && i > 0 && old.charAt(i - 1) == '-' && current.charAt(i - 1) == '-') {
-                detail = "Світло повернеться раніше: о " + clock(i) + " замість " + clock(end) + ".";
+                detail = copy.text("returnEarlier", clock(i), clock(end));
             } else if (boundary && was.equals("+") && now.equals("-") && i > 0 && old.charAt(i - 1) == '-' && current.charAt(i - 1) == '-' && end < 48 && current.charAt(end) == '+') {
-                detail = "Світло повернеться пізніше: о " + clock(end) + " замість " + clock(i) + ".";
+                detail = copy.text("returnLater", clock(end), clock(i));
             } else if (boundary && was.equals("-") && now.equals("+") && end < 48 && current.charAt(end) == '-' && (i == 0 || old.charAt(i - 1) != '-')) {
-                detail = "Відключення почнеться пізніше: о " + clock(end) + " замість " + clock(i) + ".";
+                detail = copy.text("startLater", clock(end), clock(i));
             } else if (boundary && was.equals("+") && now.equals("-") && end < 48 && old.charAt(end) == '-' && (i == 0 || current.charAt(i - 1) != '-')) {
-                detail = "Відключення почнеться раніше: о " + clock(i) + " замість " + clock(end) + ".";
+                detail = copy.text("startEarlier", clock(i), clock(end));
             } else if (now.equals("+")) {
-                detail = range + " має бути світло." + (was.equals("-") ? " Відключення на цей час скасовано." : "");
+                detail = copy.text(was.equals("-") ? "cancelled" : "on", range);
             } else if (now.equals("-")) {
-                detail = range + " заплановано відключення.";
+                detail = copy.text("off", range);
             } else if (now.equals("~")) {
-                detail = range + " можливе заживлення.";
+                detail = copy.text("possible", range);
             } else {
-                detail = range + " поки немає даних.";
+                detail = copy.text("unknown", range);
             }
-            changes.add(label + " · " + detail);
+            changes.add(copy.text("dated", label, detail));
             i = end;
         }
     }

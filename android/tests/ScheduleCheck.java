@@ -8,11 +8,22 @@ import java.util.Arrays;
 
 public final class ScheduleCheck {
     public static void main(String[] files) throws Exception {
+        String bundled = Files.readString(Path.of("android/app/src/main/assets/notifications.properties"));
+        NotificationCopy copy = NotificationCopy.parse(bundled);
+        String published = Files.readString(Path.of("android/notifications.properties"));
+        assert bundled.equals(published) || copy.updated(published) != copy : "Check template revision and placeholders";
+        String changed = bundled.replace("revision=1", "revision=2").replace("Група {0} · зміна графіка", "Зміни · {0}");
+        NotificationCopy nextCopy = copy.updated(changed);
+        assert nextCopy.text("groupTitle", "12").equals("Зміни · 12");
+        assert nextCopy.updated(bundled) == nextCopy;
+        assert copy.updated(changed.replace("Зміни · {0}", "Зміни")) == copy;
+        assert copy.updated(changed + "\ntoday=дубль") == copy;
+        assert copy.updated(null) == copy;
         Path cases = Path.of(files[0]).resolveSibling("notification-changes.tsv");
         for (String line : Files.readAllLines(cases)) {
             String[] fields = line.split("\t", -1);
             java.util.List<String> changes = new java.util.ArrayList<>();
-            Schedule.describeChange(changes, fields[0], fields[1], Integer.parseInt(fields[2]), fields[3].equals("1"));
+            Schedule.describeChange(copy, changes, fields[0], fields[1], Integer.parseInt(fields[2]), fields[3].equals("1"));
             assert changes.size() == Integer.parseInt(fields[4]) : changes;
             assert changes.isEmpty() || changes.get(0).contains(fields[5]) : changes;
         }

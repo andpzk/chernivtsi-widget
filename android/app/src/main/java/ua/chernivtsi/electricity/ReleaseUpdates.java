@@ -71,12 +71,13 @@ final class ReleaseUpdates {
             if (manager.getNotificationChannel(CHANNEL).getImportance() != NotificationManager.IMPORTANCE_NONE) {
                 PendingIntent open = PendingIntent.getActivity(context, NOTICE, download(version),
                         PendingIntent.FLAG_IMMUTABLE);
+                NotificationCopy copy = new DesignStore(context).copy();
                 manager.notify(NOTICE, new Notification.Builder(context, CHANNEL)
                         .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                        .setContentTitle("Чернівці Світло · доступна версія " + version)
-                        .setContentText("Натисни, щоб завантажити оновлення.")
+                        .setContentTitle(copy.text("releaseTitle", version))
+                        .setContentText(copy.text("releaseBody"))
                         .setContentIntent(open).setAutoCancel(true)
-                        .addAction(new Notification.Action.Builder(null, "Оновити", open).build()).build());
+                        .addAction(new Notification.Action.Builder(null, copy.text("releaseAction"), open).build()).build());
                 prefs.edit().putString("notified", version).apply();
             }
         }
