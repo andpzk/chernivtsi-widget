@@ -71,8 +71,8 @@ async function render(width, state = 'off', group = '12', family = 'medium', tom
     if(family==='accessoryInline')assert.equal(texts.length,1);
     if(family==='accessoryCircular')assert.equal(host.addAccessoryWidgetBackground,true);
     if(family==='accessoryRectangular') {
-      assert.equal(texts.slice(0,3).map(t=>t.text).join(''),'21:30 – —');
-      assert.ok(texts.some(t=>t.text.includes('кінець невідомий')));
+      assert.equal(texts.slice(0,3).map(t=>t.text).join(''),'21:30 – 00:00');
+      assert.ok(texts.some(t=>t.text.includes('Далі немає даних')));
       assert.ok(!texts.some(t=>/↻|група|12 ·|Можливе заживлення/.test(t.text)));
       assert.ok(!texts.some(t=>t.text.includes('кеш')));
       assert.deepEqual({...drawings[0].size},{width:150,height:14});

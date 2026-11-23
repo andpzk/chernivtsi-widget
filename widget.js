@@ -677,18 +677,21 @@ function lockScreenTarget(data, now) {
   const current = kyivParts(now), state = data.cells[current.slot];
   if (state === "unknown") return null;
   const tomorrow = nextDayCells(data), nextDate = shiftDate(data.date, 1);
-  const end = kyivTimestamp(shiftDate(data.date, tomorrow ? 2 : 1), "00:00");
+  const midnight = kyivTimestamp(nextDate, "00:00");
+  const end = tomorrow ? kyivTimestamp(shiftDate(nextDate, 1), "00:00") : midnight;
   const wanted = state === "on" ? "off" : "on", halfHour = 30 * 60000;
   let target = null;
   // Walk real boundaries so repeated/skipped Kyiv hours agree with the state shown at that instant.
   for (let at = (Math.floor(now / halfHour) + 1) * halfHour; at < end; at += halfHour) {
     const p = kyivParts(at);
     const cells = p.date === data.date ? data.cells : p.date === nextDate ? tomorrow : null;
-    if (!cells || cells[p.slot] === "unknown") return target;
+    if (!cells || cells[p.slot] === "unknown") {
+      return target && at === midnight ? {...target, throughMidnight:true} : target;
+    }
     if (target && cells[p.slot] !== wanted) return {...target, endAt:at, endTime:p.time};
     if (!target && cells[p.slot] === wanted) target = {at, time:p.time, state:wanted, endAt:null, endTime:null};
   }
-  if (!tomorrow && target?.state === "off") return {...target, throughMidnight:true};
+  if (!tomorrow && target) return {...target, throughMidnight:true};
   return target;
 }
 
@@ -805,7 +808,8 @@ function addLockScreenSchedule(widget, data, p, checked, ink, now) {
   }
   const notices = checked.split(" · ").slice(1);
   if (!symbol && target) notices.unshift(target.state === "on" ? "Заживлення" : "Відключення");
-  if (target && !endTime) notices.push("кінець невідомий");
+  if (target?.throughMidnight) notices.push("Далі немає даних");
+  else if (target && !endTime) notices.push("кінець невідомий");
   event.size = new Size(width, notices.length && !clearToday ? 22 : 26);
   if (notices.length) addText(content, notices.join(" · "), 8, ink);
   content.addSpacer(notices.length ? clearToday ? 1 : 5 : 7);

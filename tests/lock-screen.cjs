@@ -44,6 +44,9 @@ function render({time='19:01',hour12=false,kind='normal',family='accessoryRectan
   if(kind==='lateEndGap')cells[47]='unknown';
   if(kind==='bounded')cells.fill('off',44);
   if(kind==='endgap')cells.fill('unknown',44);
+  if(kind==='supplyMidnight'){
+    cells.fill('off',42,45);cells[45]='possible';cells.fill('on',46);
+  }
   if(kind==='noon'){cells.fill('on');cells.fill('off',24,28);}
   if(kind==='screenshot'){cells.fill('off');cells.fill('on',3,10);}
   if(kind==='yesterday')data.date='2026-11-06';
@@ -73,12 +76,14 @@ for(const hour12 of [false,true]){
   const late=render({time:'21:45',hour12,kind:'late'});
   assert.equal(late.texts.slice(0,3).join(''),hour12?'10:00 PM – 12:00 AM':'22:00 – 00:00');
   assert.ok(!late.texts.includes('кінець невідомий'));
+  const supply=render({time:'20:55',hour12,kind:'supplyMidnight'});
+  assert.equal(supply.texts.slice(0,3).join(''),hour12?'11:00 PM – 12:00 AM':'23:00 – 00:00');
+  assert.ok(supply.texts.includes('Далі немає даних'));
+  assert.ok(!supply.texts.includes('кінець невідомий'));
 }
-for(const kind of ['normal','endgap']) {
-  const partial=render({kind});
-  assert.equal(partial.texts.slice(0,3).join(''),'21:30 – —');
-  assert.ok(partial.texts.some(t=>t.includes('кінець невідомий')));
-}
+const partial=render({kind:'endgap'});
+assert.equal(partial.texts.slice(0,3).join(''),'21:30 – —');
+assert.ok(partial.texts.some(t=>t.includes('кінець невідомий')));
 const lateEndGap=render({time:'21:45',kind:'lateEndGap'});
 assert.equal(lateEndGap.texts.slice(0,3).join(''),'22:00 – —');
 assert.ok(lateEndGap.texts.includes('кінець невідомий'));
