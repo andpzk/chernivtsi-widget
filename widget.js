@@ -310,7 +310,7 @@ async function notifyScheduleChange(data, group, now) {
       const notification = new Notification();
       notification.identifier = `chernivtsi-schedule-${key}`;
       notification.title = `Група ${group} · зміна графіка`;
-      notification.body = changes[0] + (changes.length > 1 ? ` Інші зміни у віджеті: ${changes.length - 1}.` : "");
+      notification.body = changes[0];
       notification.sound = "default";
       notification.openURL = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&group=${group}`;
       await notification.schedule();

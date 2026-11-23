@@ -34,10 +34,11 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
   await notify({...data, sourceAt: now + 1000, checkedAt: now + 2000});
   assert.equal(sent.length, 0, 'Timestamps alone do not mean the schedule changed');
   data.cells[36] = 'off';
+  data.cells[44] = 'off';
   await notify(data);
   assert.equal(sent.length, 1);
   assert.match(sent[0].title, /Група 12/);
-  assert.match(sent[0].body, /Сьогодні.*18:00–18:30.*відключення/);
+  assert.equal(sent[0].body, 'Сьогодні · 18:00–18:30 заплановано відключення.');
   assert.equal(new URL(sent[0].openURL).searchParams.get('group'), '12');
   await notify(data);
   assert.equal(sent.length, 1, 'Repeated refreshes do not repeat a notification');
@@ -50,6 +51,7 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
   assert.equal(sent.length, 1, 'Omitted elapsed hours do not cause false alerts');
   const tomorrow = day('2026-11-23', 'off');
   data.cells[36] = 'on';
+  data.cells[44] = 'on';
   await notify({...data, tomorrow});
   assert.match(sent.at(-1).body, /До кінця дня.*\nЗавтра.*Опубліковано графік.*00:00–24:00/);
   assert.equal(sent.length, 2, 'Publication of tomorrow is a change');
