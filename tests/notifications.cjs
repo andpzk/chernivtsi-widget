@@ -28,6 +28,16 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
     if (changes.length) assert.ok(changes[0].includes(detail), changes[0]);
   }
 
+  const compare = (old, current) => {
+    const changes = [];
+    ctx.describeChange(changes, old.padEnd(48, '+'), current.padEnd(48, '+'), 0, true);
+    return changes[0];
+  };
+  assert.match(compare('++++--++++++--', '+--+++++++++--'), /00:30–01:30.*Було 02:00–03:00.*раніше/);
+  assert.match(compare('+--+++++++++--', '++++--++++++--'), /02:00–03:00.*Було 00:30–01:30.*пізніше/);
+  assert.match(compare('++~~', '++--'), /Раніше на цей час було можливе заживлення/);
+  assert.match(compare('++??', '++--'), /Раніше на цей час не було даних/);
+
   const data = day();
   await notify(data);
   assert.equal(sent.length, 0, 'First successful read establishes a baseline silently');
@@ -38,7 +48,7 @@ const notify = (data, group = 12, at = now) => ctx.notifyScheduleChange(data, gr
   await notify(data);
   assert.equal(sent.length, 1);
   assert.match(sent[0].title, /Група 12/);
-  assert.equal(sent[0].body, 'Сьогодні · 18:00–18:30 заплановано відключення.');
+  assert.equal(sent[0].body, 'Сьогодні · 18:00–18:30 заплановано відключення. Раніше на цей час було заплановане світло.');
   assert.equal(new URL(sent[0].openURL).searchParams.get('group'), '12');
   await notify(data);
   assert.equal(sent.length, 1, 'Repeated refreshes do not repeat a notification');

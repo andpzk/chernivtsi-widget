@@ -220,15 +220,25 @@ function describeChange(changes, old, current, start, today) {
     changes.push(label + " · " + action + (off < 0 ? "" : " Відключення за графіком: " + clock(off) + "–" + clock(runEnd(current, off)) + "."));
     return;
   }
-  const previous = old.substring(start);
-  const updated = current.substring(start);
-  if (/^[+]*-+[+]*$/.test(previous) && /^[+]*-+[+]*$/.test(updated)) {
-    const oldStart = start + previous.indexOf("-");
-    const newStart = start + updated.indexOf("-");
-    const oldEnd = runEnd(old, oldStart);
-    const newEnd = runEnd(current, newStart);
-    if (oldStart !== newStart && oldEnd !== newEnd && oldStart > start && newStart > start) {
-      changes.push(label + " · Відключення перенесли на " + clock(newStart) + "–" + clock(newEnd) + ". Було " + clock(oldStart) + "–" + clock(oldEnd) + ".");
+  // Compare whole outages even when other periods in the day are unchanged.
+  const outages = cells => Array.from(cells.matchAll(/-+/g), match => ({
+    start: match.index, end: match.index + match[0].length
+  })).filter(period => period.end > start);
+  const before = outages(old), after = outages(current);
+  const unmatched = (periods, other) => periods.filter(p =>
+    !other.some(q => p.start === q.start && p.end === q.end));
+  const removed = unmatched(before, after), added = unmatched(after, before);
+  if (removed.length === 1 && added.length === 1) {
+    const from = removed[0], to = added[0];
+    const first = Math.min(from.start, to.start), end = Math.max(from.end, to.end);
+    // Only pair isolated windows with known states and no intervening outage.
+    const isolated = cells => /^[+]*-+[+]*$/.test(cells.slice(first, end));
+    const earlierChanges = old.slice(start, first) !== current.slice(start, first);
+    if (first >= start && !earlierChanges && isolated(old) && isolated(current)
+        && from.start !== to.start && from.end !== to.end) {
+      const direction = to.start < from.start ? "раніше" : "пізніше";
+      changes.push(label + " · Відключення перенесли на " + clock(to.start) + "–" + clock(to.end)
+        + ". Було " + clock(from.start) + "–" + clock(from.end) + ". Початок " + direction + ".");
       return;
     }
   }
@@ -251,7 +261,8 @@ function describeChange(changes, old, current, start, today) {
     } else if (now === "+") {
       detail = range + " має бути світло." + (was === "-" ? " Відключення на цей час скасовано." : "");
     } else if (now === "-") {
-      detail = range + " заплановано відключення.";
+      const previousState = {"+": "було заплановане світло", "~": "було можливе заживлення", "?": "не було даних"};
+      detail = range + " заплановано відключення. Раніше на цей час " + previousState[was] + ".";
     } else if (now === "~") {
       detail = range + " можливе заживлення.";
     } else {
