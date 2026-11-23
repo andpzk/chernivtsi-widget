@@ -123,6 +123,17 @@ function setup({now=captured,today=todayHtml,tomorrow=tomorrowHtml,cache=null}={
   const beforeMidnight={...futureData,cells:Array(48).fill('on')};beforeMidnight.cells.fill('off',46);
   const night=ctx.lockScreenTarget(beforeMidnight,ctx.kyivTimestamp('2026-11-07','22:30'));
   assert.equal(night.time,'23:00');assert.equal(night.endTime,'01:00');
+  const evening=ctx.kyivTimestamp('2026-11-07','22:30');
+  const lateSupply={...futureData,cells:Array(48).fill('off')};
+  lateSupply.cells.fill('on',46);
+  const afterMidnight=Array(48).fill('off');
+  afterMidnight.fill('on',0,2);
+  const knownEnd=ctx.lockScreenTarget({...lateSupply,tomorrow:{...lateSupply.tomorrow,cells:afterMidnight}},evening);
+  assert.equal(knownEnd.endTime,'01:00','Use the known end when supply continues after midnight');
+  afterMidnight[0]='unknown';
+  const partialEnd=ctx.lockScreenTarget({...lateSupply,tomorrow:{...lateSupply.tomorrow,cells:afterMidnight}},evening);
+  assert.equal(partialEnd.throughMidnight,true,'Midnight marks the coverage boundary before an unknown overnight slot');
+  assert.equal(partialEnd.endAt,null,'Unknown overnight data is not an outage prediction');
   const unknown=nextCells.slice();unknown[0]='unknown';
   assert.equal(ctx.lockScreenSchedule(cells,'23:40',unknown).next.state,'unknown','Do not skip uncertainty to predict restoration');
   assert.equal(ctx.lockScreenTarget({...futureData,tomorrow:{...futureData.tomorrow,cells:unknown}},at),null);
