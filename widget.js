@@ -204,6 +204,22 @@ function runEnd(cells, start) {
   return end;
 }
 
+function outageDurationChange(old, current) {
+  if (old.length !== 48 || current.length !== 48) return "";
+  let slots = 0;
+  for (let i = 0; i < 48; i++) {
+    if (old[i] === current[i]) continue;
+    // Changes involving missing data or possible supply have no definite duration.
+    if (!"+-".includes(old[i]) || !"+-".includes(current[i])) return "";
+    slots += current[i] === "-" ? 1 : -1;
+  }
+  if (!slots) return "";
+  const halfHours = Math.abs(slots);
+  const duration = [Math.floor(halfHours / 2) ? Math.floor(halfHours / 2) + " год" : "",
+    halfHours % 2 ? "30 хв" : ""].filter(Boolean).join(" ");
+  return " За день на " + duration + (slots > 0 ? " більше" : " менше") + " планових відключень.";
+}
+
 function describeChange(changes, old, current, start, today) {
   const label = today ? "Сьогодні" : "Завтра";
   if (current === "emergency") {
@@ -311,7 +327,9 @@ async function notifyScheduleChange(data, group, now) {
       const current = encode(snapshot);
       if (old !== current) {
         const includePublication = day.date === tomorrow && !before && changes.length > 0;
+        const first = changes.length;
         describeChange(changes, old, current, day.date === today ? slot : 0, day.date === today);
+        if (changes.length > first) changes[first] += outageDurationChange(old, current);
         if (includePublication) changes[0] += "\n" + changes.pop();
       }
       next[day.date] = snapshot;
