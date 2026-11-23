@@ -204,6 +204,22 @@ function runEnd(cells, start) {
   return end;
 }
 
+function outageDurationChange(old, current) {
+  if (old.length !== 48 || current.length !== 48) return "";
+  let slots = 0;
+  for (let i = 0; i < 48; i++) {
+    if (old[i] === current[i]) continue;
+    // Changes involving missing data or possible supply have no definite duration.
+    if (!"+-".includes(old[i]) || !"+-".includes(current[i])) return "";
+    slots += current[i] === "-" ? 1 : -1;
+  }
+  if (!slots) return "";
+  const halfHours = Math.abs(slots);
+  const duration = [Math.floor(halfHours / 2) ? Math.floor(halfHours / 2) + " год" : "",
+    halfHours % 2 ? "30 хв" : ""].filter(Boolean).join(" ");
+  return " За день на " + duration + (slots > 0 ? " більше" : " менше") + " планових відключень.";
+}
+
 function describeChange(changes, old, current, start, today) {
   const label = today ? "Сьогодні" : "Завтра";
   if (current === "emergency") {
@@ -220,15 +236,25 @@ function describeChange(changes, old, current, start, today) {
     changes.push(label + " · " + action + (off < 0 ? "" : " Відключення за графіком: " + clock(off) + "–" + clock(runEnd(current, off)) + "."));
     return;
   }
-  const previous = old.substring(start);
-  const updated = current.substring(start);
-  if (/^[+]*-+[+]*$/.test(previous) && /^[+]*-+[+]*$/.test(updated)) {
-    const oldStart = start + previous.indexOf("-");
-    const newStart = start + updated.indexOf("-");
-    const oldEnd = runEnd(old, oldStart);
-    const newEnd = runEnd(current, newStart);
-    if (oldStart !== newStart && oldEnd !== newEnd && oldStart > start && newStart > start) {
-      changes.push(label + " · Відключення перенесли на " + clock(newStart) + "–" + clock(newEnd) + ". Було " + clock(oldStart) + "–" + clock(oldEnd) + ".");
+  // Compare whole outages even when other periods in the day are unchanged.
+  const outages = cells => Array.from(cells.matchAll(/-+/g), match => ({
+    start: match.index, end: match.index + match[0].length
+  })).filter(period => period.end > start);
+  const before = outages(old), after = outages(current);
+  const unmatched = (periods, other) => periods.filter(p =>
+    !other.some(q => p.start === q.start && p.end === q.end));
+  const removed = unmatched(before, after), added = unmatched(after, before);
+  if (removed.length === 1 && added.length === 1) {
+    const from = removed[0], to = added[0];
+    const first = Math.min(from.start, to.start), end = Math.max(from.end, to.end);
+    // Only pair isolated windows with known states and no intervening outage.
+    const isolated = cells => /^[+]*-+[+]*$/.test(cells.slice(first, end));
+    const earlierChanges = old.slice(start, first) !== current.slice(start, first);
+    if (first >= start && !earlierChanges && isolated(old) && isolated(current)
+        && from.start !== to.start && from.end !== to.end) {
+      const direction = to.start < from.start ? "раніше" : "пізніше";
+      changes.push(label + " · Відключення перенесли на " + clock(to.start) + "–" + clock(to.end)
+        + ". Було " + clock(from.start) + "–" + clock(from.end) + ". Початок " + direction + ".");
       return;
     }
   }
@@ -251,7 +277,8 @@ function describeChange(changes, old, current, start, today) {
     } else if (now === "+") {
       detail = range + " має бути світло." + (was === "-" ? " Відключення на цей час скасовано." : "");
     } else if (now === "-") {
-      detail = range + " заплановано відключення.";
+      const previousState = {"+": "було заплановане світло", "~": "було можливе заживлення", "?": "не було даних"};
+      detail = range + " заплановано відключення. Раніше на цей час " + previousState[was] + ".";
     } else if (now === "~") {
       detail = range + " можливе заживлення.";
     } else {
@@ -300,7 +327,9 @@ async function notifyScheduleChange(data, group, now) {
       const current = encode(snapshot);
       if (old !== current) {
         const includePublication = day.date === tomorrow && !before && changes.length > 0;
+        const first = changes.length;
         describeChange(changes, old, current, day.date === today ? slot : 0, day.date === today);
+        if (changes.length > first) changes[first] += outageDurationChange(old, current);
         if (includePublication) changes[0] += "\n" + changes.pop();
       }
       next[day.date] = snapshot;
